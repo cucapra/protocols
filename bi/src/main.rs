@@ -10,7 +10,7 @@ mod proto_trace;
 mod graph;
 
 use crate::bi::*;
-use crate::graph::GraphBi;
+use crate::graph::{GraphBi, TraceMonitor};
 use crate::proto_trace::*;
 use crate::signal_trace::*;
 use ::bi::{Instance, signal_trace};
@@ -255,6 +255,8 @@ fn graph_bi(
 
     let mut ctx = patronus::expr::Context::default();
     let monitor = build_joint_monitor_automaton(&mut ctx, protos, st).map_err(|e| e.to_string())?;
+    let trace_monitor = TraceMonitor::new(&monitor.protocols, cli.into(), std::io::stdout())
+        .map_err(|e| e.to_string())?;
 
     // try to parse FST, VCD or GHW file
     if let Ok(mut trace) = WaveSignalTrace::open(
@@ -271,7 +273,7 @@ fn graph_bi(
             trace.port_map(),
             monitor,
             cli.show_graph,
-            std::io::stdout(),
+            trace_monitor,
         );
         run_graph_bi_with_trace(&mut trace, bi, d, cli.print_time_every_n_cycles)
     } else {
@@ -284,7 +286,7 @@ fn graph_bi(
             trace.port_map(),
             monitor,
             cli.show_graph,
-            std::io::stdout(),
+            trace_monitor,
         );
         run_graph_bi_with_trace(&mut trace, bi, d, cli.print_time_every_n_cycles)
     }
@@ -323,6 +325,27 @@ fn run_graph_bi_with_trace<O: Write>(
     bi.finish().unwrap();
 
     Ok(has_failed)
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct TraceFormat {
+    status_only: bool,
+    include_idle: bool,
+    show_steps: bool,
+    show_waveform_time: bool,
+    display_hex: bool,
+}
+
+impl From<&Cli> for TraceFormat {
+    fn from(cli: &Cli) -> Self {
+        Self {
+            status_only: cli.status_only,
+            include_idle: cli.include_idle,
+            show_steps: cli.show_steps,
+            show_waveform_time: cli.show_waveform_time,
+            display_hex: cli.display_hex,
+        }
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -411,14 +434,9 @@ fn classic_bi(
                 let trace_id = failures[fail_indices[0]].0;
                 let mut proto_trace = bi.protocol_traces().get_trace(trace_id);
                 proto_trace.retain(|ProtoCall { name, .. }| !exclude_from_trace.contains(name));
-                print_trace(
-                    ii,
-                    &proto_trace,
-                    cli.show_steps,
-                    cli.show_waveform_time,
-                    cli.display_hex,
-                    |step| step_to_time.step_to_ns(step),
-                );
+                print_trace(ii, &proto_trace, cli.into(), |step| {
+                    step_to_time.step_to_ns(step)
+                });
 
                 for fail_idx in fail_indices {
                     if ii > 0 {
@@ -452,14 +470,9 @@ fn classic_bi(
                 if ii > 0 {
                     println!();
                 }
-                print_trace(
-                    ii,
-                    &proto_trace,
-                    cli.show_steps,
-                    cli.show_waveform_time,
-                    cli.display_hex,
-                    |step| step_to_time.step_to_ns(step),
-                );
+                print_trace(ii, &proto_trace, cli.into(), |step| {
+                    step_to_time.step_to_ns(step)
+                });
             }
         }
     }
@@ -507,14 +520,7 @@ fn run_bis(
     Ok(trace.step_to_time())
 }
 
-fn print_trace(
-    ii: usize,
-    trace: &ProtoTrace,
-    show_steps: bool,
-    show_time: bool,
-    display_hex: bool,
-    get_ns: impl Fn(u32) -> String,
-) {
+fn print_trace(ii: usize, trace: &ProtoTrace, format: TraceFormat, get_ns: impl Fn(u32) -> String) {
     println!("// trace {ii}");
     println!("trace {{");
     for ProtoCall {
@@ -530,10 +536,10 @@ fn print_trace(
             if !is_first {
                 print!(", ");
             }
-            print!("{}", arg.to_string(display_hex));
+            print!("{}", arg.to_string(format.display_hex));
         }
         print!(");");
-        if show_steps {
+        if format.show_steps {
             if let Some(end) = end {
                 if start == end {
                     println!(" [{start}]");
@@ -543,7 +549,7 @@ fn print_trace(
             } else {
                 println!(" [{start} .. ]");
             }
-        } else if show_time {
+        } else if format.show_waveform_time {
             if let Some(end) = end {
                 // the original monitor always shows the time of the next time step as end time
                 println!("  // [time: {} -> {}]", get_ns(*start), get_ns(*end + 1));

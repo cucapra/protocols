@@ -13,6 +13,7 @@
 // - we could define an array that contains all relevant values from the trace
 //   and then compile expressions to byte code that contains the concrete indices
 
+use crate::TraceFormat;
 use baa::{BitVecMutOps, BitVecOps, BitVecValue};
 use bi::signal_trace::{PortMap, SignalValues};
 use patronus::expr::{Context, Expr, ExprRef, SerializableIrNode};
@@ -47,7 +48,7 @@ impl<O: Write> GraphBi<O> {
         port_map: &PortMap,
         monitor: JointMonitorAutomaton,
         show_graph: bool,
-        out: O,
+        mut out: TraceMonitor<O>,
     ) -> Self {
         let mut c = Compiler::default();
         c.compile(st, ctx, &monitor, port_map);
@@ -55,7 +56,7 @@ impl<O: Write> GraphBi<O> {
             println!("{}", monitor.to_dot_string(ctx, st));
         }
         let max_instances = monitor.control.bank_counts.iter().cloned().max().unwrap();
-        let mon = TraceMonitor::new(st, &monitor.protocols, max_instances, out).unwrap();
+        out.init(st, &monitor.protocols, max_instances).unwrap();
 
         Self {
             current_state: monitor.control.graph.entry.as_u32() as usize,
@@ -64,7 +65,7 @@ impl<O: Write> GraphBi<O> {
             regs: c.regs,
             heads: c.heads,
             bad_state: monitor.bad_state.as_u32() as usize,
-            mon,
+            mon: out,
             step: 0,
         }
     }
@@ -193,8 +194,9 @@ impl<O: Write> GraphBi<O> {
 }
 
 #[derive(Debug)]
-struct TraceMonitor<O: Write> {
+pub struct TraceMonitor<O: Write> {
     out: O,
+    format: TraceFormat,
     proto_names: Vec<String>,
     transactions: Vec<Transaction>,
     max_instances: usize,
@@ -208,14 +210,27 @@ struct Transaction {
 }
 
 impl<O: Write> TraceMonitor<O> {
-    fn new(
+    pub fn new(protocols: &[Protocol], format: TraceFormat, out: O) -> std::io::Result<Self> {
+        let proto_names = protocols.iter().map(|p| p.name.clone()).collect();
+        Ok(Self {
+            format,
+            out,
+            proto_names,
+            transactions: vec![],
+            max_instances: usize::MAX,
+        })
+    }
+
+    fn init(
+        &mut self,
         st: &SymbolTable,
         protocols: &[Protocol],
         max_instances: usize,
-        mut out: O,
-    ) -> std::io::Result<Self> {
+    ) -> std::io::Result<()> {
+        debug_assert!(self.transactions.is_empty());
+        self.max_instances = max_instances;
         let max_entries = max_instances * protocols.len();
-        let mut transactions = vec![Transaction::default(); max_entries];
+        self.transactions = vec![Transaction::default(); max_entries];
         for (proto_idx, proto) in protocols.iter().enumerate() {
             let args: Vec<_> = proto
                 .args
@@ -224,19 +239,15 @@ impl<O: Write> TraceMonitor<O> {
                 .collect();
             for slot in 0..max_instances {
                 let tran_idx = proto_idx * max_instances + slot;
-                transactions[tran_idx].args = args.clone();
+                self.transactions[tran_idx].args = args.clone();
             }
         }
-        let proto_names = protocols.iter().map(|p| p.name.clone()).collect();
 
-        writeln!(out, "// trace 0")?;
-        writeln!(out, "trace {{")?;
-        Ok(Self {
-            out,
-            proto_names,
-            transactions,
-            max_instances,
-        })
+        if !self.format.status_only {
+            writeln!(self.out, "// trace 0")?;
+            writeln!(self.out, "trace {{")?;
+        }
+        Ok(())
     }
 
     fn start(&mut self, instance: InstanceId, step: u32) {
@@ -244,24 +255,40 @@ impl<O: Write> TraceMonitor<O> {
         let tran = &mut self.transactions[tran_idx];
         tran.start = step;
         tran.active = true;
-        println!("[{step}] start {}", self.proto_names[instance.0]);
+        // println!("[{step}] start {}", self.proto_names[instance.0]);
     }
 
     fn finish(&mut self, instance: InstanceId, step: u32) -> std::io::Result<()> {
         let tran_idx = self.transaction_id(instance);
         let tran = &mut self.transactions[tran_idx];
         tran.active = false;
-        println!("[{step}] finish {}", self.proto_names[instance.0]);
-        write!(self.out, "  {}(", self.proto_names[instance.0])?;
+        if self.format.status_only {
+            return Ok(());
+        }
+        // println!("[{step}] finish {}", self.proto_names[instance.0]);
+        write!(self.out, "    {}(", self.proto_names[instance.0])?;
         for (idx, value) in tran.args.iter().enumerate() {
             let is_first = idx == 0;
-            if is_first {
-                write!(self.out, "{}", value.to_dec_str())?;
-            } else {
-                write!(self.out, ", {}", value.to_dec_str())?;
+            match (is_first, self.format.display_hex) {
+                (true, false) => write!(self.out, "{}", value.to_dec_str())?,
+                (false, false) => write!(self.out, ", {}", value.to_dec_str())?,
+                (true, true) => write!(self.out, "0x{}", value.to_hex_str())?,
+                (false, true) => write!(self.out, ", 0x{}", value.to_hex_str())?,
             }
         }
-        writeln!(self.out, ");")?;
+        let end = step;
+        let start = tran.start;
+        if self.format.show_steps {
+            if start == end {
+                println!("); [{start}]");
+            } else {
+                println!("); [{start} .. {end}]");
+            }
+        } else if self.format.show_waveform_time {
+            todo!("add support for showing real time");
+        } else {
+            writeln!(self.out, ");")?;
+        }
 
         Ok(())
     }
@@ -274,6 +301,7 @@ impl<O: Write> TraceMonitor<O> {
     }
 
     fn transaction_id(&mut self, instance: InstanceId) -> usize {
+        debug_assert!(!self.transactions.is_empty(), "init has not been called!");
         instance.0 * self.max_instances + instance.1
     }
 }
