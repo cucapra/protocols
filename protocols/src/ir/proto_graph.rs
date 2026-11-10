@@ -5,6 +5,7 @@
 use crate::frontend::ast::ProtocolContext;
 use crate::frontend::symbol::{SymbolId, SymbolKind, SymbolTable, Type};
 use crate::ir::joint_monitor::InstanceId;
+use crate::ir::meta_automaton::ProtocolId;
 use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
 use patronus::expr::{
     Context, ExprRef, Simplifier, SparseExprMap, TypeCheck, simple_transform_expr,
@@ -68,6 +69,7 @@ impl Action {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TransitionRotation {
     pub protocol: String,
+    pub proto_id: ProtocolId,
     pub amount: usize,
 }
 

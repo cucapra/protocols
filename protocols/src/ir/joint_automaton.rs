@@ -277,6 +277,7 @@ fn add_transition(
         .filter(|(_, amount)| **amount != 0)
         .map(|(protocol, &amount)| TransitionRotation {
             protocol: protocols[protocol].name.clone(),
+            proto_id: protocol,
             amount,
         })
         .collect();

@@ -19,6 +19,7 @@ use baa::{BitVecOps, BitVecValue};
 use bi::signal_trace::{PortMap, SignalValues};
 use patronus::expr::{Context, Expr, ExprRef, SerializableIrNode};
 use protocols::frontend::symbol::{SymbolId, SymbolKind, SymbolTable};
+use protocols::ir::joint_automaton::ProtocolId;
 use protocols::ir::joint_monitor::{InstanceId, JointMonitorAutomaton};
 use protocols::ir::proto_graph::{Assignment, Node, NodeId, Op, ProtoGraph};
 use rustc_hash::FxHashMap;
@@ -29,6 +30,8 @@ pub struct GraphBi {
     states: Vec<ExecState>,
     expr: Vec<ExecExpr>,
     regs: Vec<BitVecValue>,
+    /// per protocol head counters
+    heads: Vec<(usize, usize)>,
 }
 
 impl GraphBi {
@@ -47,6 +50,7 @@ impl GraphBi {
             states: c.states,
             expr: c.expr,
             regs: c.regs,
+            heads: c.heads,
             bad_state: monitor.bad_state.as_u32() as usize,
         }
     }
@@ -95,17 +99,23 @@ impl GraphBi {
                             panic!("assertion failed");
                         }
                     }
-                    ExecAct::Finish(instance) => {
+                    &ExecAct::Finish(instance) => {
+                        let instance = self.eval_instance_id(instance);
                         println!(
                             "TODO: protocol {}, instance {} finished!",
                             instance.0, instance.1
                         );
                     }
-                    ExecAct::Start(instance) => {
+                    &ExecAct::Start(instance) => {
+                        let instance = self.eval_instance_id(instance);
                         println!(
                             "TODO: protocol {}, instance {} started!",
                             instance.0, instance.1
                         );
+                    }
+                    &ExecAct::IncrHead(proto_id, amount) => {
+                        let (old, count) = self.heads[proto_id];
+                        self.heads[proto_id].0 = (old + amount) % count;
                     }
                 }
             }
@@ -119,6 +129,13 @@ impl GraphBi {
             .cloned()
             .unwrap()
             .1 as usize
+    }
+
+    fn eval_instance_id(&self, id: InstanceId) -> InstanceId {
+        let (proto_id, base_instance) = id;
+        let (head, count) = self.heads[proto_id];
+        let instance = (base_instance + head) % count;
+        (proto_id, instance)
     }
 
     fn eval(&self, e: ExecExprId, guard_bits: u64, pin_values: &SignalValues) -> BitVecValue {
@@ -136,6 +153,7 @@ struct Compiler {
     states: Vec<ExecState>,
     expr: Vec<ExecExpr>,
     regs: Vec<BitVecValue>,
+    heads: Vec<(usize, usize)>,
     // TODO: this could be handled by an index map!
     expr_ids: FxHashMap<ExecExpr, ExecExprId>,
     port_symbol_to_index: FxHashMap<SymbolId, usize>,
@@ -171,6 +189,13 @@ impl Compiler {
         port_map: &PortMap,
     ) {
         self.clear();
+
+        self.heads = auto
+            .control
+            .bank_counts
+            .iter()
+            .map(|&count| (0usize, count))
+            .collect();
 
         let num_states = auto.control.graph.nodes().count();
         assert!(
@@ -302,10 +327,19 @@ impl Compiler {
             }
         }
 
-        let acts = act_by_guard
+        let mut acts: Vec<_> = act_by_guard
             .iter()
             .flat_map(|(g, acts)| acts.iter().map(|a| (*g, a.clone())))
             .collect();
+        // head incr happens on transitions
+        for tran in &pg[node].transitions {
+            for rot in &tran.rotations {
+                if tran.guard != ctx.get_false() {
+                    let guard_id = guard_to_index[&tran.guard];
+                    acts.push((guard_id, ExecAct::IncrHead(rot.proto_id, rot.amount)));
+                }
+            }
+        }
 
         // let transition_guards: Vec<_> = pg[node].transitions.iter().map(|t| format!("{:?}: {}", t.guard, t.guard.serialize_to_str(ctx))).collect();
         // println!("Transition Guards: {}", transition_guards.join(", "));
@@ -444,6 +478,8 @@ enum ExecAct {
     Finish(InstanceId),
     /// indicates that a particular transaction started at the beginning of the cycle
     Start(InstanceId),
+    /// increment the head count for the protocol, (protocol_id, amount)
+    IncrHead(ProtocolId, usize),
 }
 
 #[derive(Debug, PartialEq, Hash, Eq, Clone)]
