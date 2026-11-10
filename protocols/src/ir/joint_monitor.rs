@@ -64,8 +64,8 @@ pub fn build_joint_monitor_automaton(
 ) -> Result<JointMonitorAutomaton, JointMonitorError> {
     let sources = prepare_joint_protocols(ctx, &protocols, symbols)?;
     for (graph, proto) in sources.iter().zip(protocols.iter()) {
-        println!("{}", proto.name);
-        println!("{}", to_dot_string(ctx, graph, symbols));
+        //println!("{}", proto.name);
+        // println!("{}", to_dot_string(ctx, graph, symbols));
     }
     let mut monitors = Vec::new();
     for (protocol, source) in protocols.iter().zip(sources) {
@@ -193,10 +193,10 @@ pub fn compose_joint_monitor_automaton(
         let mut launches = FxHashMap::default();
         let mut edge_values = FxHashMap::default();
         for instance in result.control.instances[&node].clone() {
-            println!(
-                "{}_{}: {:?} into -> {node:?}",
-                result.protocols[instance.protocol].name, instance.slot, instance.control
-            );
+            // println!(
+            //     "{}_{}: {:?} into -> {node:?}",
+            //     result.protocols[instance.protocol].name, instance.slot, instance.control
+            // );
 
             // Use the register copies allocated for this protocol and slot.
             let owner = (instance.protocol, instance.slot);
