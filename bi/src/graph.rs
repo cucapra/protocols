@@ -198,6 +198,7 @@ pub struct TraceMonitor<O: Write> {
     out: O,
     format: TraceFormat,
     proto_names: Vec<String>,
+    proto_ignore: Vec<bool>,
     transactions: Vec<Transaction>,
     max_instances: usize,
 }
@@ -212,10 +213,16 @@ struct Transaction {
 impl<O: Write> TraceMonitor<O> {
     pub fn new(protocols: &[Protocol], format: TraceFormat, out: O) -> std::io::Result<Self> {
         let proto_names = protocols.iter().map(|p| p.name.clone()).collect();
+        let proto_ignore = if format.include_idle {
+            vec![false; protocols.len()]
+        } else {
+            protocols.iter().map(|p| p.is_idle).collect()
+        };
         Ok(Self {
             format,
             out,
             proto_names,
+            proto_ignore,
             transactions: vec![],
             max_instances: usize::MAX,
         })
@@ -262,7 +269,7 @@ impl<O: Write> TraceMonitor<O> {
         let tran_idx = self.transaction_id(instance);
         let tran = &mut self.transactions[tran_idx];
         tran.active = false;
-        if self.format.status_only {
+        if self.format.status_only || self.proto_ignore[instance.0] {
             return Ok(());
         }
         // println!("[{step}] finish {}", self.proto_names[instance.0]);
