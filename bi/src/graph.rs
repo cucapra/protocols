@@ -134,7 +134,7 @@ impl<O: Write> GraphBi<O> {
                     ExecAct::LearnedParam(instance, arg_idx, expr) => {
                         let value = self.eval(expr, guard_bits, &pin_values);
                         let instance = self.eval_instance_id(instance);
-                        self.mon.learn_param(instance, arg_idx, &value);
+                        self.mon.learn_param(instance, arg_idx, &value, self.step);
                     }
                 }
             }
@@ -293,11 +293,18 @@ impl<O: Write> TraceMonitor<O> {
         Ok(())
     }
 
-    fn learn_param(&mut self, instance: InstanceId, arg_idx: usize, value: &BitVecValue) {
+    fn learn_param(
+        &mut self,
+        instance: InstanceId,
+        arg_idx: usize,
+        value: &BitVecValue,
+        _step: u32,
+    ) {
         let tran_idx = self.transaction_id(instance);
         let tran = &mut self.transactions[tran_idx];
         // debug_assert!(tran.active);
         tran.args[arg_idx].assign(value);
+        // println!("[{step}] learned {}.{}.{} = 0x{}", self.proto_names[instance.0], instance.1, arg_idx, value.to_hex_str());
     }
 
     fn transaction_id(&mut self, instance: InstanceId) -> usize {
@@ -525,6 +532,18 @@ impl Compiler {
                 }
             }
         }
+
+        // we need actions to happen in the correct order
+        // IncrHead < Finish < LearnedParam < Start < ...
+        acts.sort_by_key(|(_, a)| match a {
+            ExecAct::IncrHead(_, _) => -0,
+            ExecAct::Finish(_) => -1,
+            ExecAct::LearnedParam(_, _, _) => -2,
+            ExecAct::Start(_) => -3,
+            ExecAct::InternalAssertFalse
+            | ExecAct::AssignReg(_, _, _)
+            | ExecAct::AssertEq(_, _) => -10,
+        });
 
         // let transition_guards: Vec<_> = pg[node].transitions.iter().map(|t| format!("{:?}: {}", t.guard, t.guard.serialize_to_str(ctx))).collect();
         // println!("Transition Guards: {}", transition_guards.join(", "));
