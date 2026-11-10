@@ -7,7 +7,6 @@ use crate::frontend::symbol::{SymbolId, SymbolTable};
 use crate::ir::driver_to_monitor::{
     MonitorAutomaton, MonitorConversionError, convert_driver_to_monitor, simplify_monitor,
 };
-use crate::ir::graphviz::to_dot_string;
 use crate::ir::joint_automaton::{
     JointAutomatonError, JointControlAutomaton, JointTransitionKind, ProtocolId,
     build_joint_control_automaton, find_finish_nodes, prepare_joint_protocols,
@@ -63,10 +62,6 @@ pub fn build_joint_monitor_automaton(
     symbols: &mut SymbolTable,
 ) -> Result<JointMonitorAutomaton, JointMonitorError> {
     let sources = prepare_joint_protocols(ctx, &protocols, symbols)?;
-    for (graph, proto) in sources.iter().zip(protocols.iter()) {
-        //println!("{}", proto.name);
-        // println!("{}", to_dot_string(ctx, graph, symbols));
-    }
     let mut monitors = Vec::new();
     for (protocol, source) in protocols.iter().zip(sources) {
         let monitor = convert_driver_to_monitor(ctx, source, symbols).map_err(|source| {

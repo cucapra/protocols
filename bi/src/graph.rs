@@ -15,38 +15,46 @@
 //   and then compile expressions to byte code that contains the concrete indices
 
 use crate::bi::Failures;
-use baa::{BitVecOps, BitVecValue};
+use baa::{BitVecMutOps, BitVecOps, BitVecValue};
 use bi::signal_trace::{PortMap, SignalValues};
 use patronus::expr::{Context, Expr, ExprRef, SerializableIrNode};
+use protocols::frontend::ast::Protocol;
 use protocols::frontend::symbol::SymbolKind::AutomatonState;
 use protocols::frontend::symbol::{SymbolId, SymbolKind, SymbolTable};
 use protocols::ir::joint_automaton::ProtocolId;
 use protocols::ir::joint_monitor::{InstanceId, JointMonitorAutomaton};
 use protocols::ir::proto_graph::{Assignment, Node, NodeId, Op, ProtoGraph};
 use rustc_hash::FxHashMap;
+use std::io::Write;
 
-pub struct GraphBi {
+pub struct GraphBi<O: Write> {
     // static during execution
     bad_state: usize,
     states: Vec<ExecState>,
     expr: Vec<ExecExpr>,
     // updated during execution
+    step: u32,
     current_state: usize,
     regs: Vec<BitVecValue>,
     /// per protocol head counters
     heads: Vec<(usize, usize)>,
+    // generated output
+    mon: TraceMonitor<O>,
 }
 
-impl GraphBi {
+impl<O: Write> GraphBi<O> {
     pub fn new(
         st: &SymbolTable,
         ctx: &mut Context,
         port_map: &PortMap,
         monitor: JointMonitorAutomaton,
+        out: O,
     ) -> Self {
         println!("{}", monitor.to_dot_string(ctx, st));
         let mut c = Compiler::default();
         c.compile(st, ctx, &monitor, port_map);
+        let max_instances = monitor.control.bank_counts.iter().cloned().max().unwrap();
+        let mon = TraceMonitor::new(st, &monitor.protocols, max_instances, out).unwrap();
 
         Self {
             current_state: monitor.control.graph.entry.as_u32() as usize,
@@ -55,6 +63,8 @@ impl GraphBi {
             regs: c.regs,
             heads: c.heads,
             bad_state: monitor.bad_state.as_u32() as usize,
+            mon,
+            step: 0,
         }
     }
 
@@ -62,18 +72,22 @@ impl GraphBi {
         self.current_state == self.bad_state
     }
 
-    pub fn exec_step(&mut self, values: SignalValues) -> std::result::Result<(), Failures> {
+    pub fn exec_step(&mut self, values: SignalValues) -> std::io::Result<()> {
         if self.current_state != self.bad_state {
-            print!("{} --> ", self.current_state);
-            self.current_state = self.exec_state(self.current_state, values);
-            println!("{}", self.current_state);
+            self.current_state = self.exec_state(self.current_state, values)?;
+            self.step += 1;
         }
         Ok(())
     }
+
+    pub fn finish(mut self) -> std::io::Result<O> {
+        writeln!(self.mon.out, "}}")?;
+        Ok(self.mon.out)
+    }
 }
 
-impl GraphBi {
-    fn exec_state(&mut self, state_id: usize, pin_values: SignalValues) -> usize {
+impl<O: Write> GraphBi<O> {
+    fn exec_state(&mut self, state_id: usize, pin_values: SignalValues) -> std::io::Result<usize> {
         let state = &self.states[state_id];
         // first we evaluate all unique guards
         let mut guard_bits = 0u64;
@@ -86,53 +100,53 @@ impl GraphBi {
         // eval actions based on guards
         for (act_guard_idx, act) in &state.acts {
             if (guard_bits >> act_guard_idx) & 1 == 1 {
-                match act {
+                match act.clone() {
                     ExecAct::InternalAssertFalse => {
                         panic!("Internal assertion failed! State {}", self.current_state)
                     }
-                    &ExecAct::AssignReg(idx, instance, value) => {
+                    ExecAct::AssignReg(idx, instance, value) => {
                         let value = self.eval(value, guard_bits, &pin_values);
                         let idx = self.reg_idx(idx, instance);
                         self.regs[idx] = value;
                     }
                     ExecAct::AssertEq(lhs, rhs) => {
-                        let lhs = self.eval(*lhs, guard_bits, &pin_values);
-                        let rhs = self.eval(*rhs, guard_bits, &pin_values);
+                        let lhs = self.eval(lhs, guard_bits, &pin_values);
+                        let rhs = self.eval(rhs, guard_bits, &pin_values);
                         let is_ok = lhs.is_equal(&rhs);
                         if !is_ok {
                             panic!("assertion failed");
                         }
                     }
-                    &ExecAct::Finish(instance) => {
+                    ExecAct::Finish(instance) => {
                         let instance = self.eval_instance_id(instance);
-                        println!(
-                            "TODO: protocol {}, instance {} finished!",
-                            instance.0, instance.1
-                        );
+                        self.mon.finish(instance, self.step)?;
                     }
-                    &ExecAct::Start(instance) => {
+                    ExecAct::Start(instance) => {
                         let instance = self.eval_instance_id(instance);
-                        println!(
-                            "TODO: protocol {}, instance {} started!",
-                            instance.0, instance.1
-                        );
+                        self.mon.start(instance, self.step);
                     }
-                    &ExecAct::IncrHead(proto_id, amount) => {
+                    ExecAct::IncrHead(proto_id, amount) => {
                         let (old, count) = self.heads[proto_id];
                         self.heads[proto_id].0 = (old + amount) % count;
+                    }
+                    ExecAct::LearnedParam(instance, arg_idx, expr) => {
+                        let value = self.eval(expr, guard_bits, &pin_values);
+                        let instance = self.eval_instance_id(instance);
+                        self.mon.learn_param(instance, arg_idx, &value);
                     }
                 }
             }
         }
 
         // calc next state based in guards:
-        state
+        let next = state
             .trans
             .iter()
             .find(|(g, _)| (guard_bits >> g) & 1 == 1)
             .cloned()
             .unwrap()
-            .1 as usize
+            .1 as usize;
+        Ok(next)
     }
 
     #[inline]
@@ -156,6 +170,91 @@ impl GraphBi {
     fn reg_idx(&self, idx: usize, instance: InstanceId) -> usize {
         let instance = self.eval_instance_id(instance);
         idx + instance.0
+    }
+}
+
+#[derive(Debug)]
+struct TraceMonitor<O: Write> {
+    out: O,
+    proto_names: Vec<String>,
+    transactions: Vec<Transaction>,
+    max_instances: usize,
+}
+
+#[derive(Debug, Default, Clone)]
+struct Transaction {
+    start: u32,
+    active: bool,
+    args: Vec<BitVecValue>,
+}
+
+impl<O: Write> TraceMonitor<O> {
+    fn new(
+        st: &SymbolTable,
+        protocols: &[Protocol],
+        max_instances: usize,
+        mut out: O,
+    ) -> std::io::Result<Self> {
+        let max_entries = max_instances * protocols.len();
+        let mut transactions = vec![Transaction::default(); max_entries];
+        for (proto_idx, proto) in protocols.iter().enumerate() {
+            let args: Vec<_> = proto
+                .args
+                .iter()
+                .map(|a| BitVecValue::zero(st[a.symbol()].tpe().bitwidth()))
+                .collect();
+            for slot in 0..max_instances {
+                let tran_idx = proto_idx * max_instances + slot;
+                transactions[tran_idx].args = args.clone();
+            }
+        }
+        let proto_names = protocols.iter().map(|p| p.name.clone()).collect();
+
+        writeln!(out, "// trace 0")?;
+        writeln!(out, "trace {{")?;
+        Ok(Self {
+            out,
+            proto_names,
+            transactions,
+            max_instances,
+        })
+    }
+
+    fn start(&mut self, instance: InstanceId, step: u32) {
+        let tran_idx = self.transaction_id(instance);
+        let tran = &mut self.transactions[tran_idx];
+        tran.start = step;
+        tran.active = true;
+    }
+
+    fn finish(&mut self, instance: InstanceId, step: u32) -> std::io::Result<()> {
+        let tran_idx = self.transaction_id(instance);
+        let tran = &mut self.transactions[tran_idx];
+        debug_assert!(tran.active);
+        tran.active = false;
+        write!(self.out, "  {}(", self.proto_names[instance.0])?;
+        for (idx, value) in tran.args.iter().enumerate() {
+            let is_first = idx == 0;
+            if is_first {
+                write!(self.out, "{}", value.to_dec_str())?;
+            } else {
+                write!(self.out, ", {}", value.to_dec_str())?;
+            }
+        }
+        writeln!(self.out, ");")?;
+
+        Ok(())
+    }
+
+    fn learn_param(&mut self, instance: InstanceId, arg_idx: usize, value: &BitVecValue) {
+        let tran_idx = self.transaction_id(instance);
+        let tran = &mut self.transactions[tran_idx];
+        // debug_assert!(tran.active);
+        tran.args[arg_idx].assign(value);
+    }
+
+    fn transaction_id(&mut self, instance: InstanceId) -> usize {
+        instance.0 * self.max_instances + instance.1
     }
 }
 
@@ -248,7 +347,8 @@ impl Compiler {
         // TODO: make sure that all nodes are reachable
         for (idx, (node_id, _)) in auto.control.graph.nodes().enumerate() {
             assert_eq!(idx, node_id.as_u32() as usize);
-            let state = self.compile_state(st, ctx, &auto.control.graph, node_id);
+            let state =
+                self.compile_state(st, ctx, &auto.control.graph, &auto.action_owners, node_id);
             assert_eq!(idx, self.states.len());
             self.states.push(state);
         }
@@ -259,6 +359,7 @@ impl Compiler {
         st: &SymbolTable,
         ctx: &mut Context,
         pg: &ProtoGraph,
+        action_owners: &FxHashMap<(NodeId, usize), InstanceId>,
         node: NodeId,
     ) -> ExecState {
         // first we collect all guards and dedup them
@@ -280,7 +381,17 @@ impl Compiler {
 
         // group actions by guards
         let mut act_by_guard = FxHashMap::<usize, Vec<ExecAct>>::default();
-        for act in &pg[node].actions {
+        for (act_idx, act) in pg[node].actions.iter().enumerate() {
+            let is_done = matches!(&pg[act.op], Op::Done);
+            if is_done {
+                continue;
+            }
+            let Some(instance_owner) = action_owners.get(&(node, act_idx)).cloned() else {
+                panic!(
+                    "No action owner for {node:?} {act:?} {:?} ({act_idx})",
+                    pg[act.op]
+                );
+            };
             let guard_id = guard_to_index[&act.guard];
             match &pg[act.op] {
                 Op::Assign(lhs, rhs) => {
@@ -321,20 +432,35 @@ impl Compiler {
                         .or_insert_with(|| vec![])
                         .push(ExecAct::InternalAssertFalse);
                 }
-                Op::Done => {} // TODO: is it ok to ignore done?
-                Op::Finish(inst_id) => {
+                Op::Done => unreachable!("we skip done earlier"),
+                &Op::Finish(inst_id) => {
+                    assert_eq!(
+                        inst_id, instance_owner,
+                        "TODO: looks like we have some redundant info here!"
+                    );
                     act_by_guard
                         .entry(guard_id)
-                        .or_insert_with(|| vec![])
-                        .push(ExecAct::Finish(inst_id.clone()));
+                        .or_insert_with(Vec::new)
+                        .push(ExecAct::Finish(inst_id));
                 }
-                Op::Start(inst_id) => {
+                &Op::Start(inst_id) => {
+                    assert_eq!(
+                        inst_id, instance_owner,
+                        "TODO: looks like we have some redundant info here!"
+                    );
                     act_by_guard
                         .entry(guard_id)
-                        .or_insert_with(|| vec![])
-                        .push(ExecAct::Start(inst_id.clone()));
+                        .or_insert_with(Vec::new)
+                        .push(ExecAct::Start(inst_id));
                 }
-                Op::LearnedParam(..) => todo!("learned param"),
+                &Op::LearnedParam(arg_id, expr) => {
+                    let inst_id = instance_owner;
+                    let expr = self.compile_expr(ctx, &guard_to_index, expr);
+                    act_by_guard
+                        .entry(guard_id)
+                        .or_insert_with(Vec::new)
+                        .push(ExecAct::LearnedParam(inst_id, arg_id, expr));
+                }
             }
         }
 
@@ -491,6 +617,8 @@ enum ExecAct {
     Start(InstanceId),
     /// increment the head count for the protocol, (protocol_id, amount)
     IncrHead(ProtocolId, usize),
+    /// Indicates that a parameter was learned, (protocol_instance, arg_index, expr)
+    LearnedParam(InstanceId, usize, ExecExprId),
 }
 
 #[derive(Debug, PartialEq, Hash, Eq, Clone)]

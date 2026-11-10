@@ -696,7 +696,9 @@ impl Converter<'_> {
                 | Op::Start(..)) => {
                     self.emit(&mut actions, action.guard, op);
                 }
-                Op::LearnedParam(..) => todo!("learned param"),
+                Op::LearnedParam(..) => {
+                    unreachable!("learned param is a monitor op, should not appear in driver")
+                }
             }
         }
         for (guard, lhs, rhs) in checks {
@@ -739,6 +741,18 @@ impl Converter<'_> {
                     Op::Assign(register, assignment),
                 );
             }
+            // emit if fully learned
+            let width = binding.known.get_bv_type(self.ctx).unwrap();
+            let ones = self.ctx.ones(width);
+            let fully_known_now = self.ctx.equal(binding.known, ones);
+            let reg_sym = self.knownness_registers[&argument];
+            let reg_expr = self.graph.symbol_expr[&reg_sym];
+            let fully_known_prev = self.ctx.equal(reg_expr, ones);
+            let not_fully_known_prev = self.ctx.not(fully_known_prev);
+            let learned = self.ctx.and(fully_known_now, not_fully_known_prev);
+            let new_value = binding.value;
+            let op = Op::LearnedParam(index, new_value);
+            self.emit(&mut actions, learned, op);
         }
         self.graph.node_mut(node).actions = actions;
         Ok(matches)
@@ -785,7 +799,7 @@ impl Converter<'_> {
     }
 
     /// This is the "workhorse" method for driver to monitor conversion,
-    /// which solves for the parameter to generate an equality constriant.
+    /// which solves for the parameter to generate an equality constraint.
     #[allow(clippy::too_many_arguments)]
     fn observe_range(
         &mut self,

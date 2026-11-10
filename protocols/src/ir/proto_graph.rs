@@ -178,7 +178,7 @@ pub enum Op {
     /// Marks the last cycle of the protocol instance, i.e., the cycle in which it finishes.
     Finish(InstanceId),
     /// Indicates that a protocol parameter is fully known now.
-    LearnedParam(InstanceId, usize, ExprRef),
+    LearnedParam(usize, ExprRef),
 }
 
 /// Substitute expression references when copying a transaction instance.
@@ -405,7 +405,7 @@ impl ProtoGraph {
                     *rhs = self.simplifier.simplify(ctx, *rhs);
                     debug_assert_eq!(lhs.get_type(ctx), rhs.get_type(ctx));
                 }
-                Op::LearnedParam(_, _, expr) => {
+                Op::LearnedParam(_, expr) => {
                     *expr = self.simplifier.simplify(ctx, *expr);
                 }
                 Op::Fork | Op::InternalAssertFalse | Op::Done | Op::Finish(_) | Op::Start(_) => {}

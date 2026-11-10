@@ -24,6 +24,7 @@ use protocols::frontend::diagnostic::{DiagnosticHandler, Level};
 use protocols::frontend::symbol::SymbolTable;
 use protocols::ir::joint_monitor::build_joint_monitor_automaton;
 use rustc_hash::{FxHashMap, FxHashSet};
+use std::io::Write;
 
 /// Args for the monitor CLI
 #[derive(Parser, Debug)]
@@ -258,20 +259,20 @@ fn graph_bi(
         sampling_mode,
         cli.force_x_to_zero,
     ) {
-        let mut bi = GraphBi::new(st, &mut ctx, trace.port_map(), monitor);
-        run_graph_bi_with_trace(&mut trace, &mut bi, d, cli.print_time_every_n_cycles)
+        let bi = GraphBi::new(st, &mut ctx, trace.port_map(), monitor, std::io::stdout());
+        run_graph_bi_with_trace(&mut trace, bi, d, cli.print_time_every_n_cycles)
     } else {
         // otherwise, we might be dealing with our own custom ASCI format
         let mut trace =
             AsciWaveTrace::open(&cli.wave, modules, instances, cli.force_x_to_zero).unwrap();
-        let mut bi = GraphBi::new(st, &mut ctx, trace.port_map(), monitor);
-        run_graph_bi_with_trace(&mut trace, &mut bi, d, cli.print_time_every_n_cycles)
+        let bi = GraphBi::new(st, &mut ctx, trace.port_map(), monitor, std::io::stdout());
+        run_graph_bi_with_trace(&mut trace, bi, d, cli.print_time_every_n_cycles)
     }
 }
 
-fn run_graph_bi_with_trace(
+fn run_graph_bi_with_trace<O: Write>(
     trace: &mut impl SignalTrace,
-    bi: &mut GraphBi,
+    mut bi: GraphBi<O>,
     _d: &mut DiagnosticHandler,
     print_time_every_n_cycles: Option<u32>,
 ) -> Result<bool, String> {
@@ -298,7 +299,10 @@ fn run_graph_bi_with_trace(
         }
     })?;
 
-    Ok(bi.has_failed())
+    let has_failed = bi.has_failed();
+    bi.finish().unwrap();
+
+    Ok(has_failed)
 }
 
 #[allow(clippy::too_many_arguments)]
