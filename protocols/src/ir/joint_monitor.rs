@@ -252,9 +252,10 @@ pub fn compose_joint_monitor_automaton(
                 .iter()
                 .find(|(n, _)| *n == instance.control)
             {
+                let finishes = remap_expr(ctx, *finishes, &substitutions);
                 // we only finish correctly if the transaction survives and takes the edge to the
                 // done state
-                let guard = ctx.and(survives, *finishes);
+                let guard = ctx.and(survives, finishes);
                 let op = Op::Finish((&instance).into());
                 push_owned_action(&mut result, node, owner, guard, op);
             }
