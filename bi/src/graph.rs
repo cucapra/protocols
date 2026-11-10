@@ -16,7 +16,7 @@
 use crate::TraceFormat;
 use baa::{BitVecMutOps, BitVecOps, BitVecValue};
 use bi::signal_trace::{PortMap, SignalValues};
-use patronus::expr::{Context, Expr, ExprRef, SerializableIrNode};
+use patronus::expr::{Context, Expr, ExprRef, SerializableIrNode, WidthInt};
 use protocols::frontend::ast::Protocol;
 use protocols::frontend::symbol::SymbolKind::AutomatonState;
 use protocols::frontend::symbol::{SymbolId, SymbolTable};
@@ -50,11 +50,12 @@ impl<O: Write> GraphBi<O> {
         show_graph: bool,
         mut out: TraceMonitor<O>,
     ) -> Self {
-        let mut c = Compiler::default();
-        c.compile(st, ctx, &monitor, port_map);
         if show_graph {
             println!("{}", monitor.to_dot_string(ctx, st));
         }
+
+        let mut c = Compiler::default();
+        c.compile(st, ctx, &monitor, port_map);
         let max_instances = monitor.control.bank_counts.iter().cloned().max().unwrap();
         out.init(st, &monitor.protocols, max_instances).unwrap();
 
@@ -166,6 +167,7 @@ impl<O: Write> GraphBi<O> {
             ExecExpr::Reg(idx, instance) => self.regs[self.reg_idx(idx, instance)].clone(),
             ExecExpr::DutPin(idx) => pin_values[idx].clone(),
             ExecExpr::Not(e) => self.eval(e, guard_bits, pin_values).not(),
+            ExecExpr::Slice(e, hi, lo) => self.eval(e, guard_bits, pin_values).slice(hi, lo),
             ExecExpr::Bin(op, a, b) => {
                 let a = self.eval(a, guard_bits, pin_values);
                 let b = self.eval(b, guard_bits, pin_values);
@@ -173,6 +175,10 @@ impl<O: Write> GraphBi<O> {
                     BOp::And => a.and(&b),
                     BOp::Or => a.or(&b),
                     BOp::Equal => a.is_equal(&b).into(),
+                    BOp::GreaterEqual => a.is_greater_or_equal(&b).into(),
+                    BOp::Add => a.add(&b),
+                    BOp::Sub => a.sub(&b),
+                    BOp::Concat => a.concat(&b),
                 }
             }
             ExecExpr::Ite(cond, tru, fals) => {
@@ -378,11 +384,19 @@ impl Compiler {
             "Can only represent up to 256 states!"
         );
 
+        println!("auto.registers:");
+
         // allocate space for registers
         let mut registers: Vec<_> = auto.registers.iter().map(|(k, v)| (*k, *v)).collect();
         // group by protocol and argument, then sort by slot
         registers.sort_by_key(|((prot, slot, arg), _)| (*prot, *arg, *slot));
         for ((proto_id, slot, _arg_sym), reg) in registers {
+            println!(
+                " - {}.{} <-> {}",
+                auto.protocols[proto_id].name,
+                slot,
+                st[reg].name()
+            );
             let instance: InstanceId = (proto_id, slot);
             let base_index = self.reg_symbol_to_index_and_instance.len() - slot;
             self.reg_symbol_to_index_and_instance
@@ -603,10 +617,34 @@ impl Compiler {
                     let b = self.compile_expr(ctx, guard_to_index, b);
                     ExecExpr::Bin(BOp::And, a, b)
                 }
+                &Expr::BVAdd(a, b, _) => {
+                    let a = self.compile_expr(ctx, guard_to_index, a);
+                    let b = self.compile_expr(ctx, guard_to_index, b);
+                    ExecExpr::Bin(BOp::Add, a, b)
+                }
+                &Expr::BVSub(a, b, _) => {
+                    let a = self.compile_expr(ctx, guard_to_index, a);
+                    let b = self.compile_expr(ctx, guard_to_index, b);
+                    ExecExpr::Bin(BOp::Sub, a, b)
+                }
                 &Expr::BVEqual(a, b) => {
                     let a = self.compile_expr(ctx, guard_to_index, a);
                     let b = self.compile_expr(ctx, guard_to_index, b);
                     ExecExpr::Bin(BOp::Equal, a, b)
+                }
+                &Expr::BVGreaterEqual(a, b) => {
+                    let a = self.compile_expr(ctx, guard_to_index, a);
+                    let b = self.compile_expr(ctx, guard_to_index, b);
+                    ExecExpr::Bin(BOp::GreaterEqual, a, b)
+                }
+                &Expr::BVConcat(a, b, _) => {
+                    let a = self.compile_expr(ctx, guard_to_index, a);
+                    let b = self.compile_expr(ctx, guard_to_index, b);
+                    ExecExpr::Bin(BOp::Concat, a, b)
+                }
+                &Expr::BVSlice { e, hi, lo } => {
+                    let e = self.compile_expr(ctx, guard_to_index, e);
+                    ExecExpr::Slice(e, hi, lo)
                 }
                 &Expr::BVIte { cond, tru, fals } => {
                     let cond = self.compile_expr(ctx, guard_to_index, cond);
@@ -731,6 +769,7 @@ enum ExecExpr {
     DutPin(usize),
     // unup
     Not(ExecExprId),
+    Slice(ExecExprId, WidthInt, WidthInt),
     // binop
     Bin(BOp, ExecExprId, ExecExprId),
     Ite(ExecExprId, ExecExprId, ExecExprId),
@@ -741,6 +780,10 @@ enum BOp {
     And,
     Or,
     Equal,
+    GreaterEqual,
+    Add,
+    Sub,
+    Concat,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
