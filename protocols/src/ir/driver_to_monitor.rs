@@ -488,6 +488,10 @@ impl Converter<'_> {
                         simplify_guarded(self.ctx, &mut self.graph.simplifier, rhs, action.guard);
                     Op::AssertEq(lhs, rhs)
                 }
+                Op::LearnedParam(idx, e) => {
+                    let e = simplify_guarded(self.ctx, &mut self.graph.simplifier, e, action.guard);
+                    Op::LearnedParam(idx, e)
+                }
                 op => op,
             };
             let op = op.remap(self.ctx, &values, &FxHashMap::default());
