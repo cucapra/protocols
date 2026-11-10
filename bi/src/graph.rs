@@ -6,7 +6,6 @@
 
 // - build custom runner, we might want to generate results on the fly
 // - we do not need to deal with the possibility of multiple traces
-// - only support wellen inputs first, can add ascii wave support later
 // - group transitions and actions by guard
 // - can we save the guard evaluation history in order to decide which one to evaluate first?
 // - is there maybe even a way to evaluate guards in parallel?
@@ -20,7 +19,7 @@ use bi::signal_trace::{PortMap, SignalValues};
 use patronus::expr::{Context, Expr, ExprRef, SerializableIrNode};
 use protocols::frontend::ast::Protocol;
 use protocols::frontend::symbol::SymbolKind::AutomatonState;
-use protocols::frontend::symbol::{SymbolId, SymbolKind, SymbolTable};
+use protocols::frontend::symbol::{SymbolId, SymbolTable};
 use protocols::ir::joint_automaton::ProtocolId;
 use protocols::ir::joint_monitor::{InstanceId, JointMonitorAutomaton};
 use protocols::ir::proto_graph::{Assignment, Node, NodeId, Op, ProtoGraph};
@@ -50,7 +49,6 @@ impl<O: Write> GraphBi<O> {
         monitor: JointMonitorAutomaton,
         out: O,
     ) -> Self {
-        println!("{}", monitor.to_dot_string(ctx, st));
         let mut c = Compiler::default();
         c.compile(st, ctx, &monitor, port_map);
         let max_instances = monitor.control.bank_counts.iter().cloned().max().unwrap();
