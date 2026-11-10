@@ -17,7 +17,7 @@ use crate::bi::Failures;
 use baa::{BitVecMutOps, BitVecOps, BitVecValue};
 use bi::signal_trace::{PortMap, SignalValues};
 use patronus::expr::{Context, Expr, ExprRef, SerializableIrNode};
-use protocols::frontend::ast::Protocol;
+use protocols::frontend::ast::{BinOp, Protocol};
 use protocols::frontend::symbol::SymbolKind::AutomatonState;
 use protocols::frontend::symbol::{SymbolId, SymbolTable};
 use protocols::ir::joint_automaton::ProtocolId;
@@ -161,13 +161,31 @@ impl<O: Write> GraphBi<O> {
             ExecExpr::Guard(idx) => BitVecValue::from_bool((guard_bits >> idx) & 1 == 1),
             ExecExpr::Reg(idx, instance) => self.regs[self.reg_idx(idx, instance)].clone(),
             ExecExpr::DutPin(idx) => pin_values[idx].clone(),
+            ExecExpr::Not(e) => self.eval(e, guard_bits, pin_values).not(),
+            ExecExpr::Bin(op, a, b) => {
+                let a = self.eval(a, guard_bits, pin_values);
+                let b = self.eval(b, guard_bits, pin_values);
+                match op {
+                    BOp::And => a.and(&b),
+                    BOp::Or => a.or(&b),
+                    BOp::Equal => a.is_equal(&b).into(),
+                }
+            }
+            ExecExpr::Ite(cond, tru, fals) => {
+                let cond = self.eval(cond, guard_bits, pin_values);
+                if cond.is_true() {
+                    self.eval(tru, guard_bits, pin_values)
+                } else {
+                    self.eval(fals, guard_bits, pin_values)
+                }
+            }
         }
     }
 
     #[inline]
     fn reg_idx(&self, idx: usize, instance: InstanceId) -> usize {
         let instance = self.eval_instance_id(instance);
-        idx + instance.0
+        idx + instance.1
     }
 }
 
@@ -223,13 +241,14 @@ impl<O: Write> TraceMonitor<O> {
         let tran = &mut self.transactions[tran_idx];
         tran.start = step;
         tran.active = true;
+        println!("[{step}] start {}", self.proto_names[instance.0]);
     }
 
     fn finish(&mut self, instance: InstanceId, step: u32) -> std::io::Result<()> {
         let tran_idx = self.transaction_id(instance);
         let tran = &mut self.transactions[tran_idx];
-        debug_assert!(tran.active);
         tran.active = false;
+        println!("[{step}] finish {}", self.proto_names[instance.0]);
         write!(self.out, "  {}(", self.proto_names[instance.0])?;
         for (idx, value) in tran.args.iter().enumerate() {
             let is_first = idx == 0;
@@ -513,6 +532,31 @@ impl Compiler {
                     "Symbols should be handled earlier: {}",
                     e.serialize_to_str(ctx)
                 ),
+                &Expr::BVNot(e, _) => {
+                    let e = self.compile_expr(ctx, guard_to_index, e);
+                    ExecExpr::Not(e)
+                }
+                &Expr::BVOr(a, b, _) => {
+                    let a = self.compile_expr(ctx, guard_to_index, a);
+                    let b = self.compile_expr(ctx, guard_to_index, b);
+                    ExecExpr::Bin(BOp::Or, a, b)
+                }
+                &Expr::BVAnd(a, b, _) => {
+                    let a = self.compile_expr(ctx, guard_to_index, a);
+                    let b = self.compile_expr(ctx, guard_to_index, b);
+                    ExecExpr::Bin(BOp::And, a, b)
+                }
+                &Expr::BVEqual(a, b) => {
+                    let a = self.compile_expr(ctx, guard_to_index, a);
+                    let b = self.compile_expr(ctx, guard_to_index, b);
+                    ExecExpr::Bin(BOp::Equal, a, b)
+                }
+                &Expr::BVIte { cond, tru, fals } => {
+                    let cond = self.compile_expr(ctx, guard_to_index, cond);
+                    let tru = self.compile_expr(ctx, guard_to_index, tru);
+                    let fals = self.compile_expr(ctx, guard_to_index, fals);
+                    ExecExpr::Ite(cond, tru, fals)
+                }
                 _ => todo!("{}", e.serialize_to_str(ctx)),
             };
             self.add_expr(expr)
@@ -628,9 +672,21 @@ enum ExecExpr {
     Reg(usize, InstanceId),
     /// look up dut pin value
     DutPin(usize),
+    // unup
+    Not(ExecExprId),
+    // binop
+    Bin(BOp, ExecExprId, ExecExprId),
+    Ite(ExecExprId, ExecExprId, ExecExprId),
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+enum BOp {
+    And,
+    Or,
+    Equal,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 struct ExecExprId(usize);
 
 impl From<usize> for ExecExprId {
