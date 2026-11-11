@@ -19,7 +19,7 @@ use bi::signal_trace::{PortMap, SignalValues};
 use patronus::expr::{Context, Expr, ExprRef, SerializableIrNode, WidthInt};
 use protocols::frontend::ast::Protocol;
 use protocols::frontend::symbol::SymbolKind::AutomatonState;
-use protocols::frontend::symbol::{SymbolId, SymbolTable};
+use protocols::frontend::symbol::{Arg, SymbolId, SymbolTable, Type};
 use protocols::ir::joint_automaton::ProtocolId;
 use protocols::ir::joint_monitor::{InstanceId, JointMonitorAutomaton};
 use protocols::ir::proto_graph::{Assignment, Node, NodeId, Op, ProtoGraph};
@@ -93,9 +93,9 @@ impl<O: Write> GraphBi<O> {
     fn exec_state(&mut self, state_id: usize, pin_values: SignalValues) -> std::io::Result<usize> {
         let state = &self.states[state_id];
         // first we evaluate all unique guards
-        let mut guard_bits = 0u64;
+        let mut guard_bits = 0u128;
         for (guard_idx, guard) in state.guards.iter().enumerate() {
-            let value = self.eval(*guard, guard_bits, &pin_values).to_u64().unwrap();
+            let value = self.eval(*guard, guard_bits, &pin_values).to_u64().unwrap() as u128;
             debug_assert_eq!(value, value & 1);
             guard_bits |= value << guard_idx;
         }
@@ -135,7 +135,7 @@ impl<O: Write> GraphBi<O> {
                     ExecAct::LearnedParam(instance, arg_idx, expr) => {
                         let value = self.eval(expr, guard_bits, &pin_values);
                         let instance = self.eval_instance_id(instance);
-                        self.mon.learn_param(instance, arg_idx, &value, self.step);
+                        self.mon.learn_param(instance, arg_idx, value, self.step);
                     }
                 }
             }
@@ -160,7 +160,7 @@ impl<O: Write> GraphBi<O> {
         (proto_id, instance)
     }
 
-    fn eval(&self, e: ExecExprId, guard_bits: u64, pin_values: &SignalValues) -> BitVecValue {
+    fn eval(&self, e: ExecExprId, guard_bits: u128, pin_values: &SignalValues) -> BitVecValue {
         match self.expr[e.0].clone() {
             ExecExpr::Lit(v) => v,
             ExecExpr::Guard(idx) => BitVecValue::from_bool((guard_bits >> idx) & 1 == 1),
@@ -213,7 +213,72 @@ pub struct TraceMonitor<O: Write> {
 struct Transaction {
     start: u32,
     active: bool,
-    args: Vec<BitVecValue>,
+    args: Vec<ArgValue>,
+}
+
+#[derive(Debug, Clone)]
+enum ArgValue {
+    Scalar(BitVecValue),
+    Seq(Vec<BitVecValue>),
+}
+
+impl ArgValue {
+    fn empty(st: &SymbolTable, arg: &Arg) -> Self {
+        match st[arg.symbol()].tpe() {
+            Type::UnsignedInt => Self::Scalar(BitVecValue::zero(64)),
+            Type::BitVec(w) => Self::Scalar(BitVecValue::zero(w)),
+            Type::Seq(_) => Self::Seq(vec![]),
+            Type::Tuple(_) => todo!("tuple"),
+            Type::Struct(_) | Type::Unknown => unreachable!(),
+        }
+    }
+
+    #[inline]
+    fn clear(&mut self) {
+        match self {
+            ArgValue::Scalar(s) => s.clear(),
+            ArgValue::Seq(s) => s.clear(),
+        }
+    }
+
+    #[inline]
+    fn learn(&mut self, value: BitVecValue) {
+        match self {
+            ArgValue::Scalar(s) => s.assign(&value),
+            ArgValue::Seq(s) => s.push(value),
+        }
+    }
+
+    #[inline]
+    fn serialize(&self, out: &mut impl Write, format: &TraceFormat) -> std::io::Result<()> {
+        match self {
+            ArgValue::Scalar(v) => serialize_bit_vec(v, out, format),
+            ArgValue::Seq(v) => {
+                write!(out, "[")?;
+                for (idx, v) in v.iter().enumerate() {
+                    let is_first = idx == 0;
+                    if !is_first {
+                        write!(out, ", ")?;
+                    }
+                    serialize_bit_vec(v, out, format)?;
+                }
+                write!(out, "]")
+            }
+        }
+    }
+}
+
+#[inline]
+fn serialize_bit_vec(
+    value: &BitVecValue,
+    out: &mut impl Write,
+    format: &TraceFormat,
+) -> std::io::Result<()> {
+    if format.display_hex {
+        write!(out, "0x{}", value.to_hex_str())
+    } else {
+        write!(out, "{}", value.to_dec_str())
+    }
 }
 
 impl<O: Write> TraceMonitor<O> {
@@ -245,11 +310,7 @@ impl<O: Write> TraceMonitor<O> {
         let max_entries = max_instances * protocols.len();
         self.transactions = vec![Transaction::default(); max_entries];
         for (proto_idx, proto) in protocols.iter().enumerate() {
-            let args: Vec<_> = proto
-                .args
-                .iter()
-                .map(|a| BitVecValue::zero(st[a.symbol()].tpe().bitwidth()))
-                .collect();
+            let args: Vec<_> = proto.args.iter().map(|a| ArgValue::empty(st, a)).collect();
             for slot in 0..max_instances {
                 let tran_idx = proto_idx * max_instances + slot;
                 self.transactions[tran_idx].args = args.clone();
@@ -282,25 +343,27 @@ impl<O: Write> TraceMonitor<O> {
         write!(self.out, "    {}(", self.proto_names[instance.0])?;
         for (idx, value) in tran.args.iter().enumerate() {
             let is_first = idx == 0;
-            match (is_first, self.format.display_hex) {
-                (true, false) => write!(self.out, "{}", value.to_dec_str())?,
-                (false, false) => write!(self.out, ", {}", value.to_dec_str())?,
-                (true, true) => write!(self.out, "0x{}", value.to_hex_str())?,
-                (false, true) => write!(self.out, ", 0x{}", value.to_hex_str())?,
+            if !is_first {
+                write!(self.out, ", ")?;
             }
+            value.serialize(&mut self.out, &self.format)?;
         }
         let end = step;
         let start = tran.start;
         if self.format.show_steps {
             if start == end {
-                println!("); [{start}]");
+                writeln!(self.out, "); [{start}]")?;
             } else {
-                println!("); [{start} .. {end}]");
+                writeln!(self.out, "); [{start} .. {end}]")?;
             }
         } else if self.format.show_waveform_time {
             todo!("add support for showing real time");
         } else {
             writeln!(self.out, ");")?;
+        }
+
+        for arg in tran.args.iter_mut() {
+            arg.clear();
         }
 
         Ok(())
@@ -310,13 +373,13 @@ impl<O: Write> TraceMonitor<O> {
         &mut self,
         instance: InstanceId,
         arg_idx: usize,
-        value: &BitVecValue,
+        value: BitVecValue,
         _step: u32,
     ) {
         let tran_idx = self.transaction_id(instance);
         let tran = &mut self.transactions[tran_idx];
         // debug_assert!(tran.active);
-        tran.args[arg_idx].assign(value);
+        tran.args[arg_idx].learn(value);
         // println!("[{step}] learned {}.{}.{} = 0x{}", self.proto_names[instance.0], instance.1, arg_idx, value.to_hex_str());
     }
 
@@ -384,19 +447,11 @@ impl Compiler {
             "Can only represent up to 256 states!"
         );
 
-        println!("auto.registers:");
-
         // allocate space for registers
         let mut registers: Vec<_> = auto.registers.iter().map(|(k, v)| (*k, *v)).collect();
         // group by protocol and argument, then sort by slot
         registers.sort_by_key(|((prot, slot, arg), _)| (*prot, *arg, *slot));
         for ((proto_id, slot, _arg_sym), reg) in registers {
-            println!(
-                " - {}.{} <-> {}",
-                auto.protocols[proto_id].name,
-                slot,
-                st[reg].name()
-            );
             let instance: InstanceId = (proto_id, slot);
             let base_index = self.reg_symbol_to_index_and_instance.len() - slot;
             self.reg_symbol_to_index_and_instance
