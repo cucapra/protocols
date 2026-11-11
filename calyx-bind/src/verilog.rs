@@ -522,6 +522,9 @@ fn action_to_verilog(
         Op::Fork => unreachable!("all forks should be gone!"),
         Op::InternalAssertFalse => {}
         Op::Done => writeln!(out, "{indent}// WARN: ignoring done")?,
+        Op::Finish(_) | Op::Start(_) | Op::LearnedParam(..) => {
+            unreachable!("unexpected op, should only be in monitor")
+        }
     }
     Ok(())
 }
