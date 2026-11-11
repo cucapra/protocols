@@ -514,7 +514,7 @@ impl Compiler {
         let mut act_by_guard = FxHashMap::<usize, Vec<ExecAct>>::default();
         for (act_idx, act) in pg[node].actions.iter().enumerate() {
             let is_done = matches!(&pg[act.op], Op::Done);
-            if is_done {
+            if is_done || act.guard == ctx.get_false() {
                 continue;
             }
             let Some(instance_owner) = action_owners.get(&(node, act_idx)).cloned() else {
@@ -523,7 +523,9 @@ impl Compiler {
                     pg[act.op]
                 );
             };
-            let guard_id = guard_to_index[&act.guard];
+            let Some(guard_id) = guard_to_index.get(&act.guard).cloned() else {
+                panic!("Could not find {}", act.guard.serialize_to_str(ctx));
+            };
             match &pg[act.op] {
                 Op::Assign(lhs, rhs) => {
                     assert_eq!(act.guard, ctx.get_true());
