@@ -1,4 +1,4 @@
-use patronus::expr::{Context, Expr, ExprRef, ForEachChild, TypeCheck};
+use patronus::expr::{Context, Expr, ExprRef, ForEachChild, SerializableIrNode, TypeCheck};
 use rustc_hash::{FxHashMap, FxHashSet};
 use thiserror::Error;
 
@@ -687,6 +687,11 @@ impl Converter<'_> {
                 Op::AssertEq(lhs, rhs)
                     if self.contains_addition(lhs) || self.contains_addition(rhs) =>
                 {
+                    println!(
+                        "checks.push({}, {});",
+                        lhs.serialize_to_str(self.ctx),
+                        rhs.serialize_to_str(self.ctx)
+                    );
                     checks.push((action.guard, lhs, rhs));
                 }
                 Op::AssertEq(lhs, rhs) => {
@@ -852,6 +857,12 @@ impl Converter<'_> {
                         }
                     };
 
+                println!(
+                    "Add detected ([{hi}:{lo}])\n- unknown = `{}`\n- offset = {}\n",
+                    unknown.serialize_to_str(self.ctx),
+                    offset.serialize_to_str(self.ctx)
+                );
+
                 if lo != 0 {
                     // dropping low bits is safe only when the offset cannot carry out of them
                     let low_offset = self.ctx.slice(offset, lo - 1, 0);
@@ -859,12 +870,18 @@ impl Converter<'_> {
                     if low_offset != self.ctx.zero(lo) {
                         return Err(self.unsupported(
                             node,
-                            "sliced additions with nonzero omitted offset bits are unsupported",
+                            format!("sliced additions with nonzero omitted offset bits are unsupported in `{}` with lo={lo} and low_offset = `{}` and offset = `{}`",
+                            pattern.serialize_to_str(self.ctx), low_offset.serialize_to_str(self.ctx), offset.serialize_to_str(self.ctx)),
                         ));
                     }
                 }
                 let offset_part = self.ctx.slice(offset, hi, lo);
                 let observed = self.ctx.sub(sample, offset_part);
+                println!(
+                    "offset_part={}, observed={}\n",
+                    offset_part.serialize_to_str(self.ctx),
+                    observed.serialize_to_str(self.ctx)
+                );
                 self.observe_range(node, guard, observed, unknown, (hi, lo), env, actions)?;
             }
             Expr::BVSlice { e, lo: offset, .. } => {
