@@ -753,7 +753,9 @@ impl Converter<'_> {
             let reg_expr = self.graph.symbol_expr[&reg_sym];
             let fully_known_prev = self.ctx.equal(reg_expr, ones);
             let not_fully_known_prev = self.ctx.not(fully_known_prev);
-            let learned = self.ctx.and(fully_known_now, not_fully_known_prev);
+            let capture = loads.get(&index).copied().unwrap_or(self.ctx.get_false());
+            let learned = self.ctx.or(not_fully_known_prev, capture);
+            let learned = self.ctx.and(fully_known_now, learned);
             let new_value = binding.value;
             let op = Op::LearnedParam(index, new_value);
             self.emit(&mut actions, learned, op);
