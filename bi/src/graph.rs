@@ -174,6 +174,7 @@ impl<O: Write> GraphBi<O> {
                 match op {
                     BOp::And => a.and(&b),
                     BOp::Or => a.or(&b),
+                    BOp::Xor => a.xor(&b),
                     BOp::Equal => a.is_equal(&b).into(),
                     BOp::GreaterEqual => a.is_greater_or_equal(&b).into(),
                     BOp::Add => a.add(&b),
@@ -674,6 +675,11 @@ impl Compiler {
                     let b = self.compile_expr(ctx, guard_to_index, b);
                     ExecExpr::Bin(BOp::And, a, b)
                 }
+                &Expr::BVXor(a, b, _) => {
+                    let a = self.compile_expr(ctx, guard_to_index, a);
+                    let b = self.compile_expr(ctx, guard_to_index, b);
+                    ExecExpr::Bin(BOp::Xor, a, b)
+                }
                 &Expr::BVAdd(a, b, _) => {
                     let a = self.compile_expr(ctx, guard_to_index, a);
                     let b = self.compile_expr(ctx, guard_to_index, b);
@@ -836,6 +842,7 @@ enum ExecExpr {
 enum BOp {
     And,
     Or,
+    Xor,
     Equal,
     GreaterEqual,
     Add,

@@ -852,18 +852,41 @@ impl Converter<'_> {
                         }
                     };
 
+                let mut offset_part = self.ctx.slice(offset, hi, lo);
                 if lo != 0 {
-                    // dropping low bits is safe only when the offset cannot carry out of them
+                    // account for carry out of the omitted low bits
                     let low_offset = self.ctx.slice(offset, lo - 1, 0);
                     let low_offset = self.graph.simplifier.simplify(self.ctx, low_offset);
                     if low_offset != self.ctx.zero(lo) {
-                        return Err(self.unsupported(
-                            node,
-                            "sliced additions with nonzero omitted offset bits are unsupported",
-                        ));
+                        let mut operand = unknown;
+                        let mut parameter_lo = 0;
+                        while let Expr::BVSlice { e, lo, .. } = self.ctx[operand] {
+                            operand = e;
+                            parameter_lo += lo;
+                        }
+                        let Some(&parameter) = self.parameter_exprs.get(&operand) else {
+                            return Err(self.unsupported(
+                                node,
+                                "sliced additions with a carry require a parameter or parameter slice operand",
+                            ));
+                        };
+                        let binding = env[parameter];
+                        let known =
+                            self.ctx
+                                .slice(binding.known, parameter_lo + lo - 1, parameter_lo);
+                        let ones = self.ctx.ones(lo);
+                        self.emit(actions, guard, Op::AssertEq(known, ones));
+                        let low_value =
+                            self.ctx
+                                .slice(binding.value, parameter_lo + lo - 1, parameter_lo);
+                        let low_value = self.ctx.zero_extend(low_value, 1);
+                        let low_offset = self.ctx.zero_extend(low_offset, 1);
+                        let sum = self.ctx.add(low_value, low_offset);
+                        let carry = self.ctx.slice(sum, lo, lo);
+                        let carry = self.ctx.zero_extend(carry, hi - lo);
+                        offset_part = self.ctx.add(offset_part, carry);
                     }
                 }
-                let offset_part = self.ctx.slice(offset, hi, lo);
                 let observed = self.ctx.sub(sample, offset_part);
                 self.observe_range(node, guard, observed, unknown, (hi, lo), env, actions)?;
             }
