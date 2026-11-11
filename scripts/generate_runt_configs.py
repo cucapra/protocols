@@ -218,7 +218,8 @@ def graph_interp_runt_command(case: dict) -> list[tuple[str, str]]:
     return [(suffix, repo_root_command(cmd + flags)) for suffix, flags in flows]
 
 
-def bi_runt_command(case: dict) -> list[tuple[str, str]]:
+def bi_raw_cmd(case: dict) -> list[str]:
+    """shared for graph and non-graph bi"""
     # We pass in `--color never` to BI to suppress color in error messages
     # (so that the .expect files only display plaintext)
     cmd = [*binary_prefix("bi"), "--color", "never"]
@@ -229,6 +230,18 @@ def bi_runt_command(case: dict) -> list[tuple[str, str]]:
     if case["instances"]:
         cmd += ["--instances", *case["instances"]]
     cmd += case["extra_args"]
+    return cmd
+
+
+def bi_runt_command(case: dict) -> list[tuple[str, str]]:
+    cmd = bi_raw_cmd(case)
+    # We redirect stderr to stdout so that the expected output files
+    # contain error messages if BI fails
+    return [("", repo_root_command(cmd, stderr="stdout"))]
+
+
+def bi_graph_runt_command(case: dict) -> list[tuple[str, str]]:
+    cmd = bi_raw_cmd(case) + ["--graph"]
     # We redirect stderr to stdout so that the expected output files
     # contain error messages if BI fails
     return [("", repo_root_command(cmd, stderr="stdout"))]
@@ -384,6 +397,7 @@ RUNT_BUILDERS = {
     "interp": interp_runt_command,
     "graph_interp": graph_interp_runt_command,
     "bi": bi_runt_command,
+    "bi-graph": bi_graph_runt_command,
     "monitor_status": monitor_status_runt_command,
     "waveform": waveform_runt_command,
     "fail": fail_runt_command,
@@ -457,6 +471,16 @@ def monitor_status_cases(cases: list[dict]) -> list[dict]:
             {"for_in_loop", "repeat_loop"} & protocol_constructs(path)
             for path in case["paths"]
         )
+    ]
+
+
+def graph_bi_cases(cases: list[dict]) -> list[dict]:
+    """Exclude failing cases."""
+    return [
+        case
+        # ignore cases that the automata repr can't handle
+        for case in cases
+        if case["expected"] == "pass"
     ]
 
 
@@ -537,6 +561,7 @@ def generate_runt_configs() -> None:
     suite_specs = {
         "interp": ("interp", tx),
         "bi": ("bi", bi),
+        "bi-graph": ("bi-graph", graph_bi_cases(bi)),
         "monitor_status": ("monitor_status", monitor_status_cases(bi)),
         "graph_interp": ("graph_interp", graph_interp_cases(tx)),
         "waveform": ("waveform", waveform_cases(tx)),
