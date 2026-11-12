@@ -16,13 +16,15 @@
 use crate::TraceFormat;
 use baa::{BitVecMutOps, BitVecOps, BitVecValue};
 use bi::signal_trace::{PortMap, SignalValues};
-use patronus::expr::{Context, Expr, ExprRef, SerializableIrNode, WidthInt};
+use patronus::expr::{
+    Context, Expr, ExprRef, SerializableIrNode, Simplifier, SparseExprMap, WidthInt,
+};
 use protocols::frontend::ast::Protocol;
 use protocols::frontend::symbol::SymbolKind::AutomatonState;
 use protocols::frontend::symbol::{Arg, SymbolId, SymbolTable, Type};
 use protocols::ir::joint_automaton::ProtocolId;
 use protocols::ir::joint_monitor::{InstanceId, JointMonitorAutomaton};
-use protocols::ir::proto_graph::{Assignment, Node, NodeId, Op, ProtoGraph};
+use protocols::ir::proto_graph::{Assignment, NodeId, Op, ProtoGraph};
 use rustc_hash::FxHashMap;
 use std::io::Write;
 
@@ -30,13 +32,11 @@ pub struct GraphBi<O: Write> {
     // static during execution
     bad_state: usize,
     states: Vec<ExecState>,
-    expr: Vec<ExecExpr>,
     // updated during execution
+    regs: Regs,
+    expr: ExprEval,
     step: u32,
     current_state: usize,
-    regs: Vec<BitVecValue>,
-    /// per protocol head counters
-    heads: Vec<(usize, usize)>,
     // generated output
     mon: TraceMonitor<O>,
 }
@@ -62,9 +62,8 @@ impl<O: Write> GraphBi<O> {
         Self {
             current_state: monitor.control.graph.entry.as_u32() as usize,
             states: c.states,
-            expr: c.expr,
-            regs: c.regs,
-            heads: c.heads,
+            expr: c.expr.into(),
+            regs: Regs::new(c.regs, c.heads),
             bad_state: monitor.bad_state.as_u32() as usize,
             mon: out,
             step: 0,
@@ -92,49 +91,41 @@ impl<O: Write> GraphBi<O> {
 impl<O: Write> GraphBi<O> {
     fn exec_state(&mut self, state_id: usize, pin_values: SignalValues) -> std::io::Result<usize> {
         let state = &self.states[state_id];
-        // first we evaluate all unique guards
-        let mut guard_bits = 0u128;
-        for (guard_idx, guard) in state.guards.iter().enumerate() {
-            let value = self.eval(*guard, guard_bits, &pin_values).to_u64().unwrap() as u128;
-            debug_assert_eq!(value, value & 1);
-            guard_bits |= value << guard_idx;
-        }
 
         // eval actions based on guards
-        for (act_guard_idx, act) in &state.acts {
-            if (guard_bits >> act_guard_idx) & 1 == 1 {
+        for (guard, act) in &state.acts {
+            let guard = self.expr.eval(*guard, &pin_values, &self.regs);
+            if guard.is_true() {
                 match act.clone() {
                     ExecAct::InternalAssertFalse => {
                         panic!("Internal assertion failed! State {}", self.current_state)
                     }
                     ExecAct::AssignReg(idx, instance, value) => {
-                        let value = self.eval(value, guard_bits, &pin_values);
-                        let idx = self.reg_idx(idx, instance);
-                        self.regs[idx] = value;
+                        let value = self.expr.eval(value, &pin_values, &self.regs);
+                        self.regs.write(idx, instance, value);
                     }
                     ExecAct::AssertEq(lhs, rhs) => {
-                        let lhs = self.eval(lhs, guard_bits, &pin_values);
-                        let rhs = self.eval(rhs, guard_bits, &pin_values);
+                        let lhs = self.expr.eval(lhs, &pin_values, &self.regs);
+                        let rhs = self.expr.eval(rhs, &pin_values, &self.regs);
                         let is_ok = lhs.is_equal(&rhs);
                         if !is_ok {
                             panic!("assertion failed");
                         }
                     }
                     ExecAct::Finish(instance) => {
-                        let instance = self.eval_instance_id(instance);
+                        let instance = self.regs.eval_instance_id(instance);
                         self.mon.finish(instance, self.step)?;
                     }
                     ExecAct::Start(instance) => {
-                        let instance = self.eval_instance_id(instance);
+                        let instance = self.regs.eval_instance_id(instance);
                         self.mon.start(instance, self.step);
                     }
                     ExecAct::IncrHead(proto_id, amount) => {
-                        let (old, count) = self.heads[proto_id];
-                        self.heads[proto_id].0 = (old + amount) % count;
+                        self.regs.incr_head(proto_id, amount);
                     }
                     ExecAct::LearnedParam(instance, arg_idx, expr) => {
-                        let value = self.eval(expr, guard_bits, &pin_values);
-                        let instance = self.eval_instance_id(instance);
+                        let value = self.expr.eval(expr, &pin_values, &self.regs);
+                        let instance = self.regs.eval_instance_id(instance);
                         self.mon.learn_param(instance, arg_idx, value, self.step);
                     }
                 }
@@ -145,11 +136,51 @@ impl<O: Write> GraphBi<O> {
         let next = state
             .trans
             .iter()
-            .find(|(g, _)| (guard_bits >> g) & 1 == 1)
+            .find(|(g, _)| self.expr.eval(*g, &pin_values, &self.regs).is_true())
             .cloned()
             .unwrap()
             .1 as usize;
+
+        // invalidate expression cache
+        self.expr.clear_cache();
+
         Ok(next)
+    }
+}
+
+struct Regs {
+    /// per protocol head counters
+    heads: Vec<(usize, usize)>,
+    /// other registers
+    regs: Vec<BitVecValue>,
+}
+
+impl Regs {
+    fn new(regs: Vec<BitVecValue>, heads: Vec<(usize, usize)>) -> Self {
+        Self { heads, regs }
+    }
+
+    #[inline]
+    fn incr_head(&mut self, proto_id: ProtocolId, amount: usize) {
+        let (old, count) = self.heads[proto_id];
+        self.heads[proto_id].0 = (old + amount) % count;
+    }
+
+    #[inline]
+    fn read(&self, idx: usize, instance: InstanceId) -> BitVecValue {
+        self.regs[self.reg_idx(idx, instance)].clone()
+    }
+
+    #[inline]
+    fn write(&mut self, idx: usize, instance: InstanceId, value: BitVecValue) {
+        let final_idx = self.reg_idx(idx, instance);
+        self.regs[final_idx].assign(&value);
+    }
+
+    #[inline]
+    fn reg_idx(&self, idx: usize, instance: InstanceId) -> usize {
+        let instance = self.eval_instance_id(instance);
+        idx + instance.1
     }
 
     #[inline]
@@ -159,18 +190,37 @@ impl<O: Write> GraphBi<O> {
         let instance = (base_instance + head) % count;
         (proto_id, instance)
     }
+}
 
-    fn eval(&self, e: ExecExprId, guard_bits: u128, pin_values: &SignalValues) -> BitVecValue {
+struct ExprEval {
+    expr: Vec<ExecExpr>,
+    cache: Vec<Option<BitVecValue>>,
+}
+
+impl From<Vec<ExecExpr>> for ExprEval {
+    fn from(expr: Vec<ExecExpr>) -> Self {
+        let cache = vec![None; expr.len()];
+        Self { expr, cache }
+    }
+}
+
+impl ExprEval {
+    fn clear_cache(&mut self) {
+        for e in self.cache.iter_mut() {
+            *e = None;
+        }
+    }
+
+    fn eval(&mut self, e: ExecExprId, pin_values: &SignalValues, regs: &Regs) -> BitVecValue {
         match self.expr[e.0].clone() {
             ExecExpr::Lit(v) => v,
-            ExecExpr::Guard(idx) => BitVecValue::from_bool((guard_bits >> idx) & 1 == 1),
-            ExecExpr::Reg(idx, instance) => self.regs[self.reg_idx(idx, instance)].clone(),
+            ExecExpr::Reg(idx, instance) => regs.read(idx, instance),
             ExecExpr::DutPin(idx) => pin_values[idx].clone(),
-            ExecExpr::Not(e) => self.eval(e, guard_bits, pin_values).not(),
-            ExecExpr::Slice(e, hi, lo) => self.eval(e, guard_bits, pin_values).slice(hi, lo),
+            ExecExpr::Not(e) => self.eval(e, pin_values, regs).not(),
+            ExecExpr::Slice(e, hi, lo) => self.eval(e, pin_values, regs).slice(hi, lo),
             ExecExpr::Bin(op, a, b) => {
-                let a = self.eval(a, guard_bits, pin_values);
-                let b = self.eval(b, guard_bits, pin_values);
+                let a = self.eval(a, pin_values, regs);
+                let b = self.eval(b, pin_values, regs);
                 match op {
                     BOp::And => a.and(&b),
                     BOp::Or => a.or(&b),
@@ -183,20 +233,14 @@ impl<O: Write> GraphBi<O> {
                 }
             }
             ExecExpr::Ite(cond, tru, fals) => {
-                let cond = self.eval(cond, guard_bits, pin_values);
+                let cond = self.eval(cond, pin_values, regs);
                 if cond.is_true() {
-                    self.eval(tru, guard_bits, pin_values)
+                    self.eval(tru, pin_values, regs)
                 } else {
-                    self.eval(fals, guard_bits, pin_values)
+                    self.eval(fals, pin_values, regs)
                 }
             }
         }
-    }
-
-    #[inline]
-    fn reg_idx(&self, idx: usize, instance: InstanceId) -> usize {
-        let instance = self.eval_instance_id(instance);
-        idx + instance.1
     }
 }
 
@@ -390,17 +434,30 @@ impl<O: Write> TraceMonitor<O> {
     }
 }
 
-#[derive(Debug, Default)]
 struct Compiler {
     states: Vec<ExecState>,
     expr: Vec<ExecExpr>,
     regs: Vec<BitVecValue>,
     heads: Vec<(usize, usize)>,
-    // TODO: this could be handled by an index map!
-    expr_ids: FxHashMap<ExecExpr, ExecExprId>,
     port_symbol_to_index: FxHashMap<SymbolId, usize>,
     reg_symbol_to_index_and_instance: FxHashMap<SymbolId, (usize, InstanceId)>,
     patronus_expr_map: FxHashMap<ExprRef, ExecExprId>,
+    simplifier: Simplifier<SparseExprMap<Option<ExprRef>>>,
+}
+
+impl Default for Compiler {
+    fn default() -> Self {
+        Self {
+            states: vec![],
+            expr: vec![],
+            regs: vec![],
+            heads: vec![],
+            port_symbol_to_index: Default::default(),
+            reg_symbol_to_index_and_instance: Default::default(),
+            patronus_expr_map: Default::default(),
+            simplifier: Simplifier::new(SparseExprMap::default()),
+        }
+    }
 }
 
 impl Compiler {
@@ -409,23 +466,18 @@ impl Compiler {
         self.expr.clear();
         self.regs.clear();
         self.heads.clear();
-        self.expr_ids.clear();
         self.port_symbol_to_index.clear();
         self.reg_symbol_to_index_and_instance.clear();
         self.patronus_expr_map.clear();
+        self.simplifier = Simplifier::new(SparseExprMap::default());
     }
 
-    fn add_expr(&mut self, expr: ExecExpr) -> ExecExprId {
-        if let Some(id) = self.expr_ids.get(&expr) {
-            *id
-        } else {
-            let id = self.expr.len().into();
-            self.expr_ids.insert(expr.clone(), id);
-            self.expr.push(expr);
-            id
-        }
+    fn add_expr(&mut self, expr_ref: ExprRef, expr: ExecExpr) -> ExecExprId {
+        let id = self.expr.len().into();
+        self.patronus_expr_map.insert(expr_ref, id);
+        self.expr.push(expr);
+        id
     }
-
     fn compile(
         &mut self,
         st: &SymbolTable,
@@ -457,9 +509,8 @@ impl Compiler {
             let base_index = self.reg_symbol_to_index_and_instance.len() - slot;
             self.reg_symbol_to_index_and_instance
                 .insert(reg, (base_index, instance));
-            let expr = self.add_expr(ExecExpr::Reg(base_index, instance));
-            self.patronus_expr_map
-                .insert(auto.control.graph.symbol_expr[&reg], expr);
+            let expr_ref = auto.control.graph.symbol_expr[&reg];
+            self.add_expr(expr_ref, ExecExpr::Reg(base_index, instance));
             let Expr::BVLiteral(init_value) = &ctx[auto.register_inits[&reg]] else {
                 panic!("Failed to find init value for {}", st[reg].full_name(st));
             };
@@ -471,9 +522,8 @@ impl Compiler {
             assert_eq!(port.instance_id, 0);
             let sym = port.pin_id;
             self.port_symbol_to_index.insert(sym, *index);
-            let expr = self.add_expr(ExecExpr::DutPin(*index));
-            self.patronus_expr_map
-                .insert(auto.control.graph.symbol_expr[&sym], expr);
+            let expr_ref = auto.control.graph.symbol_expr[&sym];
+            self.add_expr(expr_ref, ExecExpr::DutPin(*index));
         }
 
         // TODO: make sure that all nodes are reachable
@@ -494,25 +544,8 @@ impl Compiler {
         action_owners: &FxHashMap<(NodeId, usize), InstanceId>,
         node: NodeId,
     ) -> ExecState {
-        // first we collect all guards and dedup them
-        let mut guards: Vec<_> = all_guards(ctx, pg, &pg[node]);
-        // add a static "true" guard to the front
-        guards.insert(0, ctx.get_true());
-
-        // compile guards
-        let mut guard_to_index = FxHashMap::default();
-        let guards: Vec<_> = guards
-            .into_iter()
-            .enumerate()
-            .map(|(idx, g)| {
-                let compiled = self.compile_expr(ctx, &guard_to_index, g);
-                guard_to_index.insert(g, idx);
-                compiled
-            })
-            .collect();
-
-        // group actions by guards
-        let mut act_by_guard = FxHashMap::<usize, Vec<ExecAct>>::default();
+        // compile actions
+        let mut acts = vec![];
         for (act_idx, act) in pg[node].actions.iter().enumerate() {
             let is_done = matches!(&pg[act.op], Op::Done);
             if is_done || act.guard == ctx.get_false() {
@@ -524,9 +557,7 @@ impl Compiler {
                     pg[act.op]
                 );
             };
-            let Some(guard_id) = guard_to_index.get(&act.guard).cloned() else {
-                panic!("Could not find {}", act.guard.serialize_to_str(ctx));
-            };
+            let guard = self.compile_expr(ctx, act.guard);
             match &pg[act.op] {
                 Op::Assign(lhs, rhs) => {
                     assert_eq!(act.guard, ctx.get_true());
@@ -542,29 +573,20 @@ impl Compiler {
                     assert_eq!(rhs.concretes.len(), concrete_full_guards.len());
                     for ((_, value), guard) in rhs.concretes.iter().zip(concrete_full_guards.iter())
                     {
-                        let guard_id = guard_to_index[guard];
-                        let value = self.compile_expr(ctx, &guard_to_index, *value);
+                        let guard = self.compile_expr(ctx, *guard);
+                        let value = self.compile_expr(ctx, *value);
                         let act = ExecAct::AssignReg(base_index, instance, value);
-                        act_by_guard
-                            .entry(guard_id)
-                            .or_insert_with(Vec::new)
-                            .push(act);
+                        acts.push((guard, act));
                     }
                 }
                 Op::AssertEq(a, b) => {
-                    let a = self.compile_expr(ctx, &guard_to_index, *a);
-                    let b = self.compile_expr(ctx, &guard_to_index, *b);
-                    act_by_guard
-                        .entry(guard_id)
-                        .or_insert_with(|| vec![])
-                        .push(ExecAct::AssertEq(a, b));
+                    let a = self.compile_expr(ctx, *a);
+                    let b = self.compile_expr(ctx, *b);
+                    acts.push((guard, ExecAct::AssertEq(a, b)));
                 }
                 Op::Fork => unreachable!("forks should have been resolved!"),
                 Op::InternalAssertFalse => {
-                    act_by_guard
-                        .entry(guard_id)
-                        .or_insert_with(|| vec![])
-                        .push(ExecAct::InternalAssertFalse);
+                    acts.push((guard, ExecAct::InternalAssertFalse));
                 }
                 Op::Done => unreachable!("we skip done earlier"),
                 &Op::Finish(inst_id) => {
@@ -572,42 +594,29 @@ impl Compiler {
                         inst_id, instance_owner,
                         "TODO: looks like we have some redundant info here!"
                     );
-                    act_by_guard
-                        .entry(guard_id)
-                        .or_insert_with(Vec::new)
-                        .push(ExecAct::Finish(inst_id));
+                    acts.push((guard, ExecAct::Finish(inst_id)));
                 }
                 &Op::Start(inst_id) => {
                     assert_eq!(
                         inst_id, instance_owner,
                         "TODO: looks like we have some redundant info here!"
                     );
-                    act_by_guard
-                        .entry(guard_id)
-                        .or_insert_with(Vec::new)
-                        .push(ExecAct::Start(inst_id));
+                    acts.push((guard, ExecAct::Start(inst_id)));
                 }
                 &Op::LearnedParam(arg_id, expr) => {
                     let inst_id = instance_owner;
-                    let expr = self.compile_expr(ctx, &guard_to_index, expr);
-                    act_by_guard
-                        .entry(guard_id)
-                        .or_insert_with(Vec::new)
-                        .push(ExecAct::LearnedParam(inst_id, arg_id, expr));
+                    let expr = self.compile_expr(ctx, expr);
+                    acts.push((guard, ExecAct::LearnedParam(inst_id, arg_id, expr)));
                 }
             }
         }
 
-        let mut acts: Vec<_> = act_by_guard
-            .iter()
-            .flat_map(|(g, acts)| acts.iter().map(|a| (*g, a.clone())))
-            .collect();
         // head incr happens on transitions
         for tran in &pg[node].transitions {
             for rot in &tran.rotations {
                 if tran.guard != ctx.get_false() {
-                    let guard_id = guard_to_index[&tran.guard];
-                    acts.push((guard_id, ExecAct::IncrHead(rot.proto_id, rot.amount)));
+                    let guard = self.compile_expr(ctx, tran.guard);
+                    acts.push((guard, ExecAct::IncrHead(rot.proto_id, rot.amount)));
                 }
             }
         }
@@ -630,29 +639,22 @@ impl Compiler {
         let trans = pg[node]
             .transitions
             .iter()
-            .filter(|t| t.guard != ctx.get_false())
-            .map(|t| {
+            .flat_map(|t| {
                 assert!(t.consumes_step);
-                (guard_to_index[&t.guard], t.target.as_u32() as u8)
+                (t.guard != ctx.get_false()).then(|| {
+                    let guard = self.compile_expr(ctx, t.guard);
+                    (guard, t.target.as_u32() as u8)
+                })
             })
             .collect();
 
-        ExecState {
-            guards,
-            acts,
-            trans,
-        }
+        ExecState { acts, trans }
     }
 
-    fn compile_expr(
-        &mut self,
-        ctx: &Context,
-        guard_to_index: &FxHashMap<ExprRef, usize>,
-        e: ExprRef,
-    ) -> ExecExprId {
-        if let Some(guard_idx) = guard_to_index.get(&e) {
-            self.add_expr(ExecExpr::Guard(*guard_idx))
-        } else if let Some(expr) = self.patronus_expr_map.get(&e) {
+    fn compile_expr(&mut self, ctx: &mut Context, e: ExprRef) -> ExecExprId {
+        let e = self.simplifier.simplify(ctx, e);
+
+        if let Some(expr) = self.patronus_expr_map.get(&e) {
             *expr
         } else {
             let expr = match &ctx[e] {
@@ -662,81 +664,64 @@ impl Compiler {
                     e.serialize_to_str(ctx)
                 ),
                 &Expr::BVNot(e, _) => {
-                    let e = self.compile_expr(ctx, guard_to_index, e);
+                    let e = self.compile_expr(ctx, e);
                     ExecExpr::Not(e)
                 }
                 &Expr::BVOr(a, b, _) => {
-                    let a = self.compile_expr(ctx, guard_to_index, a);
-                    let b = self.compile_expr(ctx, guard_to_index, b);
+                    let a = self.compile_expr(ctx, a);
+                    let b = self.compile_expr(ctx, b);
                     ExecExpr::Bin(BOp::Or, a, b)
                 }
                 &Expr::BVAnd(a, b, _) => {
-                    let a = self.compile_expr(ctx, guard_to_index, a);
-                    let b = self.compile_expr(ctx, guard_to_index, b);
+                    let a = self.compile_expr(ctx, a);
+                    let b = self.compile_expr(ctx, b);
                     ExecExpr::Bin(BOp::And, a, b)
                 }
                 &Expr::BVXor(a, b, _) => {
-                    let a = self.compile_expr(ctx, guard_to_index, a);
-                    let b = self.compile_expr(ctx, guard_to_index, b);
+                    let a = self.compile_expr(ctx, a);
+                    let b = self.compile_expr(ctx, b);
                     ExecExpr::Bin(BOp::Xor, a, b)
                 }
                 &Expr::BVAdd(a, b, _) => {
-                    let a = self.compile_expr(ctx, guard_to_index, a);
-                    let b = self.compile_expr(ctx, guard_to_index, b);
+                    let a = self.compile_expr(ctx, a);
+                    let b = self.compile_expr(ctx, b);
                     ExecExpr::Bin(BOp::Add, a, b)
                 }
                 &Expr::BVSub(a, b, _) => {
-                    let a = self.compile_expr(ctx, guard_to_index, a);
-                    let b = self.compile_expr(ctx, guard_to_index, b);
+                    let a = self.compile_expr(ctx, a);
+                    let b = self.compile_expr(ctx, b);
                     ExecExpr::Bin(BOp::Sub, a, b)
                 }
                 &Expr::BVEqual(a, b) => {
-                    let a = self.compile_expr(ctx, guard_to_index, a);
-                    let b = self.compile_expr(ctx, guard_to_index, b);
+                    let a = self.compile_expr(ctx, a);
+                    let b = self.compile_expr(ctx, b);
                     ExecExpr::Bin(BOp::Equal, a, b)
                 }
                 &Expr::BVGreaterEqual(a, b) => {
-                    let a = self.compile_expr(ctx, guard_to_index, a);
-                    let b = self.compile_expr(ctx, guard_to_index, b);
+                    let a = self.compile_expr(ctx, a);
+                    let b = self.compile_expr(ctx, b);
                     ExecExpr::Bin(BOp::GreaterEqual, a, b)
                 }
                 &Expr::BVConcat(a, b, _) => {
-                    let a = self.compile_expr(ctx, guard_to_index, a);
-                    let b = self.compile_expr(ctx, guard_to_index, b);
+                    let a = self.compile_expr(ctx, a);
+                    let b = self.compile_expr(ctx, b);
                     ExecExpr::Bin(BOp::Concat, a, b)
                 }
                 &Expr::BVSlice { e, hi, lo } => {
-                    let e = self.compile_expr(ctx, guard_to_index, e);
+                    let e = self.compile_expr(ctx, e);
                     ExecExpr::Slice(e, hi, lo)
                 }
                 &Expr::BVIte { cond, tru, fals } => {
-                    let cond = self.compile_expr(ctx, guard_to_index, cond);
-                    let tru = self.compile_expr(ctx, guard_to_index, tru);
-                    let fals = self.compile_expr(ctx, guard_to_index, fals);
+                    let cond = self.compile_expr(ctx, cond);
+                    let tru = self.compile_expr(ctx, tru);
+                    let fals = self.compile_expr(ctx, fals);
                     ExecExpr::Ite(cond, tru, fals)
                 }
                 _ => todo!("{}", e.serialize_to_str(ctx)),
             };
-            self.add_expr(expr)
+            self.add_expr(e, expr)
         }
     }
-}
-
-fn all_guards(ctx: &mut Context, pg: &ProtoGraph, node: &Node) -> Vec<ExprRef> {
-    let mut all: Vec<_> = node
-        .actions
-        .iter()
-        .flat_map(|a| match &pg[a.op] {
-            Op::Assign(_, a) => parallel_assignment_guards(ctx, a),
-            _ => vec![],
-        })
-        .chain(node.transitions.iter().map(|t| t.guard))
-        .chain(node.actions.iter().map(|a| a.guard))
-        .collect();
-    all.sort_unstable();
-    all.dedup();
-    all.retain(|g| *g != ctx.get_true() && *g != ctx.get_false());
-    all
 }
 
 /// returns mutually exclusive guards for each concrete assignment
@@ -801,9 +786,8 @@ fn and(ctx: &mut Context, a: ExprRef, b: ExprRef) -> ExprRef {
 
 #[derive(Debug)]
 struct ExecState {
-    guards: Vec<ExecExprId>,
-    acts: Vec<(usize, ExecAct)>,
-    trans: Vec<(usize, u8)>,
+    acts: Vec<(ExecExprId, ExecAct)>,
+    trans: Vec<(ExecExprId, u8)>,
 }
 
 #[derive(Debug, Clone)]
@@ -824,8 +808,6 @@ enum ExecAct {
 #[derive(Debug, PartialEq, Hash, Eq, Clone)]
 enum ExecExpr {
     Lit(BitVecValue),
-    /// look up local guard expression which must have already been computed
-    Guard(usize),
     /// look up register value
     Reg(usize, InstanceId),
     /// look up dut pin value
