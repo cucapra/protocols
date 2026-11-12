@@ -176,18 +176,21 @@ impl Regs {
 
     #[inline]
     fn read(&self, idx: usize, instance: InstanceId) -> Word {
-        self.regs[self.reg_idx(idx, instance)]
+        let final_idx = self.reg_idx(idx, instance);
+        self.regs[final_idx]
+        // println!("reg[{final_idx}] -> {value}");
     }
 
     #[inline]
     fn write(&mut self, idx: usize, instance: InstanceId, value: Word) {
         let final_idx = self.reg_idx(idx, instance);
         self.next[final_idx] = value;
+        // println!("reg[{final_idx}] <- {value}");
     }
 
     #[inline]
     fn commit(&mut self) {
-        std::mem::swap(&mut self.next, &mut self.regs);
+        self.regs.as_mut_slice().copy_from_slice(&self.next);
     }
 
     #[inline]
