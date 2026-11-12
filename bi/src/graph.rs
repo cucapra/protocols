@@ -407,19 +407,23 @@ struct Transaction {
 
 #[derive(Debug, Clone)]
 enum ArgValue {
-    Scalar(Word),
-    Seq(Vec<Word>),
+    Scalar(Word, WidthInt),
+    Seq(Vec<Word>, WidthInt),
 }
 
 impl ArgValue {
     fn empty(st: &SymbolTable, arg: &Arg) -> Self {
         match st[arg.symbol()].tpe() {
-            Type::UnsignedInt => Self::Scalar(0),
+            Type::UnsignedInt => Self::Scalar(0, 64),
             Type::BitVec(w) => {
                 assert!(w <= Word::BITS);
-                Self::Scalar(0)
+                Self::Scalar(0, w)
             }
-            Type::Seq(_) => Self::Seq(vec![]),
+            Type::Seq(seq_id) => {
+                let w = st[seq_id].tpe().bitwidth();
+                assert!(w <= Word::BITS);
+                Self::Seq(vec![], w)
+            }
             Type::Tuple(_) => todo!("tuple"),
             Type::Struct(_) | Type::Unknown => unreachable!(),
         }
@@ -428,31 +432,30 @@ impl ArgValue {
     #[inline]
     fn clear(&mut self) {
         match self {
-            ArgValue::Scalar(s) => *s = 0,
-            ArgValue::Seq(s) => s.clear(),
+            ArgValue::Scalar(s, ..) => *s = 0,
+            ArgValue::Seq(s, ..) => s.clear(),
         }
     }
 
     #[inline]
     fn learn(&mut self, value: Word) {
         match self {
-            ArgValue::Scalar(s) => *s = value,
-            ArgValue::Seq(s) => s.push(value),
+            ArgValue::Scalar(s, ..) => *s = value,
+            ArgValue::Seq(s, ..) => s.push(value),
         }
     }
 
-    #[inline]
     fn serialize(&self, out: &mut impl Write, format: &TraceFormat) -> std::io::Result<()> {
         match self {
-            ArgValue::Scalar(v) => serialize_bit_vec(v, out, format),
-            ArgValue::Seq(v) => {
+            ArgValue::Scalar(v, w) => serialize_bit_vec(v, *w, out, format),
+            ArgValue::Seq(v, w) => {
                 write!(out, "[")?;
                 for (idx, v) in v.iter().enumerate() {
                     let is_first = idx == 0;
                     if !is_first {
                         write!(out, ", ")?;
                     }
-                    serialize_bit_vec(v, out, format)?;
+                    serialize_bit_vec(v, *w, out, format)?;
                 }
                 write!(out, "]")
             }
@@ -463,11 +466,22 @@ impl ArgValue {
 #[inline]
 fn serialize_bit_vec(
     value: &Word,
+    width: WidthInt,
     out: &mut impl Write,
     format: &TraceFormat,
 ) -> std::io::Result<()> {
     if format.display_hex {
-        write!(out, "0x{value:x}")
+        // for hex values we need to pad with zeros
+        let leading_zeros = value.leading_zeros() - (Word::BITS - width);
+        let num_zeros = leading_zeros / 4;
+        write!(out, "0x")?;
+        for _ in 0..num_zeros {
+            write!(out, "0")?;
+        }
+        if *value != 0 {
+            write!(out, "{value:x}")?;
+        }
+        Ok(())
     } else {
         write!(out, "{value}")
     }
