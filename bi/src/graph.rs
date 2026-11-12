@@ -211,35 +211,90 @@ impl ExprEval {
         }
     }
 
+    fn eval_many(&mut self, mut todo: Vec<ExecExprId>, pin_values: &SignalValues, regs: &Regs) {
+        while let Some(expr_id) = todo.pop() {
+            if self.cache[expr_id.0].is_none() {
+                let new_expr = match self.expr[expr_id.0].clone() {
+                    ExecExpr::Lit(v) => Some(v),
+                    ExecExpr::Reg(idx, instance) => Some(regs.read(idx, instance)),
+                    ExecExpr::DutPin(idx) => Some(pin_values[idx].clone()),
+                    ExecExpr::Not(e) if let Some(e) = &self.cache[e.0] => Some(e.not()),
+                    ExecExpr::Not(e) => {
+                        todo.push(expr_id);
+                        todo.push(e);
+                        None
+                    }
+                    ExecExpr::Slice(e, hi, lo) if let Some(e) = &self.cache[e.0] => {
+                        Some(e.slice(hi, lo))
+                    }
+                    ExecExpr::Slice(e, ..) => {
+                        todo.push(expr_id);
+                        todo.push(e);
+                        None
+                    }
+                    ExecExpr::Bin(op, a, b) => match (&self.cache[a.0], &self.cache[b.0]) {
+                        (Some(a), Some(b)) => Some(match op {
+                            BOp::And => a.and(b),
+                            BOp::Or => a.or(b),
+                            BOp::Xor => a.xor(b),
+                            BOp::Equal => a.is_equal(b).into(),
+                            BOp::GreaterEqual => a.is_greater_or_equal(b).into(),
+                            BOp::Add => a.add(b),
+                            BOp::Sub => a.sub(b),
+                            BOp::Concat => a.concat(b),
+                        }),
+                        (None, Some(_)) => {
+                            todo.push(expr_id);
+                            todo.push(a);
+                            None
+                        }
+                        (Some(_), None) => {
+                            todo.push(expr_id);
+                            todo.push(b);
+                            None
+                        }
+                        (None, None) => {
+                            todo.push(expr_id);
+                            todo.push(a);
+                            todo.push(b);
+                            None
+                        }
+                    },
+                    ExecExpr::Ite(cond, tru, fals) => {
+                        if let Some(cond) = &self.cache[cond.0] {
+                            if cond.is_true() {
+                                let val = &self.cache[tru.0];
+                                if val.is_none() {
+                                    todo.push(expr_id);
+                                    todo.push(tru);
+                                }
+                                val.clone()
+                            } else {
+                                let val = &self.cache[fals.0];
+                                if val.is_none() {
+                                    todo.push(expr_id);
+                                    todo.push(fals);
+                                }
+                                val.clone()
+                            }
+                        } else {
+                            todo.push(expr_id);
+                            todo.push(cond);
+                            None
+                        }
+                    }
+                };
+                self.cache[expr_id.0] = new_expr;
+            }
+        }
+    }
+
     fn eval(&mut self, e: ExecExprId, pin_values: &SignalValues, regs: &Regs) -> BitVecValue {
-        match self.expr[e.0].clone() {
-            ExecExpr::Lit(v) => v,
-            ExecExpr::Reg(idx, instance) => regs.read(idx, instance),
-            ExecExpr::DutPin(idx) => pin_values[idx].clone(),
-            ExecExpr::Not(e) => self.eval(e, pin_values, regs).not(),
-            ExecExpr::Slice(e, hi, lo) => self.eval(e, pin_values, regs).slice(hi, lo),
-            ExecExpr::Bin(op, a, b) => {
-                let a = self.eval(a, pin_values, regs);
-                let b = self.eval(b, pin_values, regs);
-                match op {
-                    BOp::And => a.and(&b),
-                    BOp::Or => a.or(&b),
-                    BOp::Xor => a.xor(&b),
-                    BOp::Equal => a.is_equal(&b).into(),
-                    BOp::GreaterEqual => a.is_greater_or_equal(&b).into(),
-                    BOp::Add => a.add(&b),
-                    BOp::Sub => a.sub(&b),
-                    BOp::Concat => a.concat(&b),
-                }
-            }
-            ExecExpr::Ite(cond, tru, fals) => {
-                let cond = self.eval(cond, pin_values, regs);
-                if cond.is_true() {
-                    self.eval(tru, pin_values, regs)
-                } else {
-                    self.eval(fals, pin_values, regs)
-                }
-            }
+        if let Some(e) = &self.cache[e.0] {
+            e.clone()
+        } else {
+            self.eval_many(vec![e], pin_values, regs);
+            self.cache[e.0].clone().unwrap()
         }
     }
 }
