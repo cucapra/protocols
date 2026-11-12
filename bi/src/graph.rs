@@ -330,7 +330,7 @@ impl ExprEval {
                                 }
                                 BOp::Add => (a + b) & mask,
                                 BOp::Sub => (a - b) & mask,
-                                BOp::Concat => (a << mask) & b,
+                                BOp::Concat => (a << mask) | b,
                             }),
                             (None, Some(_)) => {
                                 todo.push(expr_id);
