@@ -287,8 +287,10 @@ impl ExprEval {
                     ExecExpr::Lit(v) => Some(v),
                     ExecExpr::Reg(idx, instance) => Some(regs.read(idx, instance)),
                     ExecExpr::DutPin(idx) => Some(self.pin_values[idx]),
-                    ExecExpr::Not(e) if let Some(e) = self.cache[usize::from(e)] => Some(!e),
-                    ExecExpr::Not(e) => {
+                    ExecExpr::Not(e, mask) if let Some(e) = self.cache[usize::from(e)] => {
+                        Some((!e) & mask)
+                    }
+                    ExecExpr::Not(e, ..) => {
                         todo.push(expr_id);
                         todo.push(e);
                         None
@@ -325,7 +327,7 @@ impl ExprEval {
                                 }
                                 BOp::Add => (a + b) & mask,
                                 BOp::Sub => (a - b) & mask,
-                                BOp::Concat => a << mask & b,
+                                BOp::Concat => (a << mask) & b,
                             }),
                             (None, Some(_)) => {
                                 todo.push(expr_id);
@@ -651,7 +653,7 @@ impl Compiler {
             ExecExpr::Lit(_) => FxHashSet::default(),
             ExecExpr::Reg(idx, _) => FxHashSet::from_iter([Dep::Reg(*idx)].into_iter()),
             ExecExpr::DutPin(idx) => FxHashSet::from_iter([Dep::Pin(*idx)].into_iter()),
-            ExecExpr::Not(e) => self.dependencies[usize::from(*e)].clone(),
+            ExecExpr::Not(e, ..) => self.dependencies[usize::from(*e)].clone(),
             ExecExpr::Slice(e, _, _) => self.dependencies[usize::from(*e)].clone(),
             ExecExpr::Bin(_, a, b, _) => {
                 let a = &self.dependencies[usize::from(*a)];
@@ -886,7 +888,7 @@ impl Compiler {
                 ),
                 &Expr::BVNot(e, _) => {
                     let e = self.compile_expr(ctx, e);
-                    ExecExpr::Not(e)
+                    ExecExpr::Not(e, mask)
                 }
                 &Expr::BVOr(a, b, _) => {
                     let a = self.compile_expr(ctx, a);
@@ -1036,7 +1038,7 @@ enum ExecExpr {
     /// look up dut pin value
     DutPin(usize),
     // unup
-    Not(ExecExprId),
+    Not(ExecExprId, Word),
     Slice(ExecExprId, WidthInt, WidthInt),
     // binop
     Bin(BOp, ExecExprId, ExecExprId, Word),
