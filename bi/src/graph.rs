@@ -91,6 +91,8 @@ impl<O: Write> GraphBi<O> {
 impl<O: Write> GraphBi<O> {
     fn exec_state(&mut self, state_id: usize, pin_values: SignalValues) -> std::io::Result<usize> {
         let state = &self.states[state_id];
+        self.expr
+            .eval_many(&state.unique_guards, &pin_values, &self.regs);
 
         // eval actions based on guards
         for (guard, act) in &state.acts {
@@ -195,12 +197,18 @@ impl Regs {
 struct ExprEval {
     expr: Vec<ExecExpr>,
     cache: Vec<Option<BitVecValue>>,
+    /// keep todo buffer around to avoid allocations
+    todo: Vec<ExecExprId>,
 }
 
 impl From<Vec<ExecExpr>> for ExprEval {
     fn from(expr: Vec<ExecExpr>) -> Self {
         let cache = vec![None; expr.len()];
-        Self { expr, cache }
+        Self {
+            expr,
+            cache,
+            todo: Vec::with_capacity(1024),
+        }
     }
 }
 
@@ -211,20 +219,24 @@ impl ExprEval {
         }
     }
 
-    fn eval_many(&mut self, mut todo: Vec<ExecExprId>, pin_values: &SignalValues, regs: &Regs) {
+    fn eval_many(&mut self, expressions: &[ExecExprId], pin_values: &SignalValues, regs: &Regs) {
+        debug_assert!(self.todo.is_empty());
+        let mut todo = std::mem::take(&mut self.todo);
+        todo.extend_from_slice(expressions);
+
         while let Some(expr_id) = todo.pop() {
-            if self.cache[expr_id.0].is_none() {
-                let new_expr = match self.expr[expr_id.0].clone() {
+            if self.cache[usize::from(expr_id)].is_none() {
+                let new_expr = match self.expr[usize::from(expr_id)].clone() {
                     ExecExpr::Lit(v) => Some(v),
                     ExecExpr::Reg(idx, instance) => Some(regs.read(idx, instance)),
                     ExecExpr::DutPin(idx) => Some(pin_values[idx].clone()),
-                    ExecExpr::Not(e) if let Some(e) = &self.cache[e.0] => Some(e.not()),
+                    ExecExpr::Not(e) if let Some(e) = &self.cache[usize::from(e)] => Some(e.not()),
                     ExecExpr::Not(e) => {
                         todo.push(expr_id);
                         todo.push(e);
                         None
                     }
-                    ExecExpr::Slice(e, hi, lo) if let Some(e) = &self.cache[e.0] => {
+                    ExecExpr::Slice(e, hi, lo) if let Some(e) = &self.cache[usize::from(e)] => {
                         Some(e.slice(hi, lo))
                     }
                     ExecExpr::Slice(e, ..) => {
@@ -232,45 +244,47 @@ impl ExprEval {
                         todo.push(e);
                         None
                     }
-                    ExecExpr::Bin(op, a, b) => match (&self.cache[a.0], &self.cache[b.0]) {
-                        (Some(a), Some(b)) => Some(match op {
-                            BOp::And => a.and(b),
-                            BOp::Or => a.or(b),
-                            BOp::Xor => a.xor(b),
-                            BOp::Equal => a.is_equal(b).into(),
-                            BOp::GreaterEqual => a.is_greater_or_equal(b).into(),
-                            BOp::Add => a.add(b),
-                            BOp::Sub => a.sub(b),
-                            BOp::Concat => a.concat(b),
-                        }),
-                        (None, Some(_)) => {
-                            todo.push(expr_id);
-                            todo.push(a);
-                            None
+                    ExecExpr::Bin(op, a, b) => {
+                        match (&self.cache[usize::from(a)], &self.cache[usize::from(b)]) {
+                            (Some(a), Some(b)) => Some(match op {
+                                BOp::And => a.and(b),
+                                BOp::Or => a.or(b),
+                                BOp::Xor => a.xor(b),
+                                BOp::Equal => a.is_equal(b).into(),
+                                BOp::GreaterEqual => a.is_greater_or_equal(b).into(),
+                                BOp::Add => a.add(b),
+                                BOp::Sub => a.sub(b),
+                                BOp::Concat => a.concat(b),
+                            }),
+                            (None, Some(_)) => {
+                                todo.push(expr_id);
+                                todo.push(a);
+                                None
+                            }
+                            (Some(_), None) => {
+                                todo.push(expr_id);
+                                todo.push(b);
+                                None
+                            }
+                            (None, None) => {
+                                todo.push(expr_id);
+                                todo.push(a);
+                                todo.push(b);
+                                None
+                            }
                         }
-                        (Some(_), None) => {
-                            todo.push(expr_id);
-                            todo.push(b);
-                            None
-                        }
-                        (None, None) => {
-                            todo.push(expr_id);
-                            todo.push(a);
-                            todo.push(b);
-                            None
-                        }
-                    },
+                    }
                     ExecExpr::Ite(cond, tru, fals) => {
-                        if let Some(cond) = &self.cache[cond.0] {
+                        if let Some(cond) = &self.cache[usize::from(cond)] {
                             if cond.is_true() {
-                                let val = &self.cache[tru.0];
+                                let val = &self.cache[usize::from(tru)];
                                 if val.is_none() {
                                     todo.push(expr_id);
                                     todo.push(tru);
                                 }
                                 val.clone()
                             } else {
-                                let val = &self.cache[fals.0];
+                                let val = &self.cache[usize::from(fals)];
                                 if val.is_none() {
                                     todo.push(expr_id);
                                     todo.push(fals);
@@ -284,17 +298,21 @@ impl ExprEval {
                         }
                     }
                 };
-                self.cache[expr_id.0] = new_expr;
+                self.cache[usize::from(expr_id)] = new_expr;
             }
         }
+
+        debug_assert!(todo.is_empty());
+        std::mem::swap(&mut todo, &mut self.todo);
     }
 
+    #[inline]
     fn eval(&mut self, e: ExecExprId, pin_values: &SignalValues, regs: &Regs) -> BitVecValue {
-        if let Some(e) = &self.cache[e.0] {
+        if let Some(e) = &self.cache[usize::from(e)] {
             e.clone()
         } else {
-            self.eval_many(vec![e], pin_values, regs);
-            self.cache[e.0].clone().unwrap()
+            self.eval_many(&[e], pin_values, regs);
+            self.cache[usize::from(e)].clone().unwrap()
         }
     }
 }
@@ -691,7 +709,7 @@ impl Compiler {
         // let transition_guards: Vec<_> = pg[node].transitions.iter().map(|t| format!("{:?}: {}", t.guard, t.guard.serialize_to_str(ctx))).collect();
         // println!("Transition Guards: {}", transition_guards.join(", "));
 
-        let trans = pg[node]
+        let trans: Vec<_> = pg[node]
             .transitions
             .iter()
             .flat_map(|t| {
@@ -703,7 +721,19 @@ impl Compiler {
             })
             .collect();
 
-        ExecState { acts, trans }
+        let mut unique_guards: Vec<_> = acts
+            .iter()
+            .map(|(guard, _)| *guard)
+            .chain(trans.iter().map(|(guard, _)| *guard))
+            .collect();
+        unique_guards.sort_unstable();
+        unique_guards.dedup();
+
+        ExecState {
+            acts,
+            trans,
+            unique_guards,
+        }
     }
 
     fn compile_expr(&mut self, ctx: &mut Context, e: ExprRef) -> ExecExprId {
@@ -841,6 +871,7 @@ fn and(ctx: &mut Context, a: ExprRef, b: ExprRef) -> ExprRef {
 
 #[derive(Debug)]
 struct ExecState {
+    unique_guards: Vec<ExecExprId>,
     acts: Vec<(ExecExprId, ExecAct)>,
     trans: Vec<(ExecExprId, u8)>,
 }
@@ -887,11 +918,17 @@ enum BOp {
     Concat,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-struct ExecExprId(usize);
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
+struct ExecExprId(u32);
 
 impl From<usize> for ExecExprId {
     fn from(value: usize) -> Self {
-        Self(value)
+        Self(value as u32)
+    }
+}
+
+impl From<ExecExprId> for usize {
+    fn from(id: ExecExprId) -> Self {
+        id.0 as usize
     }
 }
