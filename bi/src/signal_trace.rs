@@ -33,6 +33,10 @@ impl<'a> SignalValues<'a> {
         let index = self.port_map[&key];
         (&self.values[index]).into()
     }
+
+    pub fn iter(&self) -> impl Iterator<Item = &BitVecValue> {
+        self.values.iter()
+    }
 }
 
 /// Raw indexing into the signal values. This is useful for when the PortMap is resolved statically
