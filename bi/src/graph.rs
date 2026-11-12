@@ -14,10 +14,10 @@
 //   and then compile expressions to byte code that contains the concrete indices
 
 use crate::TraceFormat;
-use baa::{BitVecMutOps, BitVecOps, BitVecValue};
+use baa::BitVecOps;
 use bi::signal_trace::{PortMap, SignalValues};
 use patronus::expr::{
-    Context, Expr, ExprRef, SerializableIrNode, Simplifier, SparseExprMap, WidthInt,
+    Context, Expr, ExprRef, SerializableIrNode, Simplifier, SparseExprMap, TypeCheck, WidthInt,
 };
 use protocols::frontend::ast::Protocol;
 use protocols::frontend::symbol::SymbolKind::AutomatonState;
@@ -97,7 +97,7 @@ impl<O: Write> GraphBi<O> {
         // eval actions based on guards
         for (guard, act) in &state.acts {
             let guard = self.expr.eval(*guard, &pin_values, &self.regs);
-            if guard.is_true() {
+            if guard != 0 {
                 match act.clone() {
                     ExecAct::InternalAssertFalse => {
                         panic!("Internal assertion failed! State {}", self.current_state)
@@ -109,7 +109,7 @@ impl<O: Write> GraphBi<O> {
                     ExecAct::AssertEq(lhs, rhs) => {
                         let lhs = self.expr.eval(lhs, &pin_values, &self.regs);
                         let rhs = self.expr.eval(rhs, &pin_values, &self.regs);
-                        let is_ok = lhs.is_equal(&rhs);
+                        let is_ok = lhs == rhs;
                         if !is_ok {
                             panic!("assertion failed");
                         }
@@ -138,7 +138,7 @@ impl<O: Write> GraphBi<O> {
         let next = state
             .trans
             .iter()
-            .find(|(g, _)| self.expr.eval(*g, &pin_values, &self.regs).is_true())
+            .find(|(g, _)| self.expr.eval(*g, &pin_values, &self.regs) != 0)
             .cloned()
             .unwrap()
             .1 as usize;
@@ -150,15 +150,17 @@ impl<O: Write> GraphBi<O> {
     }
 }
 
+type Word = u64;
+
 struct Regs {
     /// per protocol head counters
     heads: Vec<(usize, usize)>,
     /// other registers
-    regs: Vec<BitVecValue>,
+    regs: Vec<Word>,
 }
 
 impl Regs {
-    fn new(regs: Vec<BitVecValue>, heads: Vec<(usize, usize)>) -> Self {
+    fn new(regs: Vec<Word>, heads: Vec<(usize, usize)>) -> Self {
         Self { heads, regs }
     }
 
@@ -169,14 +171,14 @@ impl Regs {
     }
 
     #[inline]
-    fn read(&self, idx: usize, instance: InstanceId) -> BitVecValue {
+    fn read(&self, idx: usize, instance: InstanceId) -> Word {
         self.regs[self.reg_idx(idx, instance)].clone()
     }
 
     #[inline]
-    fn write(&mut self, idx: usize, instance: InstanceId, value: BitVecValue) {
+    fn write(&mut self, idx: usize, instance: InstanceId, value: Word) {
         let final_idx = self.reg_idx(idx, instance);
-        self.regs[final_idx].assign(&value);
+        self.regs[final_idx] = value;
     }
 
     #[inline]
@@ -196,7 +198,7 @@ impl Regs {
 
 struct ExprEval {
     expr: Vec<ExecExpr>,
-    cache: Vec<Option<BitVecValue>>,
+    cache: Vec<Option<Word>>,
     /// keep todo buffer around to avoid allocations
     todo: Vec<ExecExprId>,
 }
@@ -229,32 +231,46 @@ impl ExprEval {
                 let new_expr = match self.expr[usize::from(expr_id)].clone() {
                     ExecExpr::Lit(v) => Some(v),
                     ExecExpr::Reg(idx, instance) => Some(regs.read(idx, instance)),
-                    ExecExpr::DutPin(idx) => Some(pin_values[idx].clone()),
-                    ExecExpr::Not(e) if let Some(e) = &self.cache[usize::from(e)] => Some(e.not()),
+                    ExecExpr::DutPin(idx) => Some(pin_values[idx].to_u64().unwrap()),
+                    ExecExpr::Not(e) if let Some(e) = self.cache[usize::from(e)] => Some(!e),
                     ExecExpr::Not(e) => {
                         todo.push(expr_id);
                         todo.push(e);
                         None
                     }
-                    ExecExpr::Slice(e, hi, lo) if let Some(e) = &self.cache[usize::from(e)] => {
-                        Some(e.slice(hi, lo))
+                    ExecExpr::Slice(e, hi, lo) if let Some(e) = self.cache[usize::from(e)] => {
+                        let width = hi - lo + 1;
+                        let mask = (1u64 << width) - 1;
+                        Some((e >> lo) & mask)
                     }
                     ExecExpr::Slice(e, ..) => {
                         todo.push(expr_id);
                         todo.push(e);
                         None
                     }
-                    ExecExpr::Bin(op, a, b) => {
-                        match (&self.cache[usize::from(a)], &self.cache[usize::from(b)]) {
+                    ExecExpr::Bin(op, a, b, mask) => {
+                        match (self.cache[usize::from(a)], self.cache[usize::from(b)]) {
                             (Some(a), Some(b)) => Some(match op {
-                                BOp::And => a.and(b),
-                                BOp::Or => a.or(b),
-                                BOp::Xor => a.xor(b),
-                                BOp::Equal => a.is_equal(b).into(),
-                                BOp::GreaterEqual => a.is_greater_or_equal(b).into(),
-                                BOp::Add => a.add(b),
-                                BOp::Sub => a.sub(b),
-                                BOp::Concat => a.concat(b),
+                                BOp::And => a & b,
+                                BOp::Or => a | b,
+                                BOp::Xor => a ^ b,
+                                BOp::Equal => {
+                                    if a == b {
+                                        1
+                                    } else {
+                                        0
+                                    }
+                                }
+                                BOp::GreaterEqual => {
+                                    if a >= b {
+                                        1
+                                    } else {
+                                        0
+                                    }
+                                }
+                                BOp::Add => (a + b) & mask,
+                                BOp::Sub => (a - b) & mask,
+                                BOp::Concat => a << mask & b,
                             }),
                             (None, Some(_)) => {
                                 todo.push(expr_id);
@@ -275,19 +291,19 @@ impl ExprEval {
                         }
                     }
                     ExecExpr::Ite(cond, tru, fals) => {
-                        if let Some(cond) = &self.cache[usize::from(cond)] {
-                            if cond.is_true() {
-                                let val = &self.cache[usize::from(tru)];
-                                if val.is_none() {
-                                    todo.push(expr_id);
-                                    todo.push(tru);
-                                }
-                                val.clone()
-                            } else {
-                                let val = &self.cache[usize::from(fals)];
+                        if let Some(cond) = self.cache[usize::from(cond)] {
+                            if cond == 0 {
+                                let val = self.cache[usize::from(fals)];
                                 if val.is_none() {
                                     todo.push(expr_id);
                                     todo.push(fals);
+                                }
+                                val.clone()
+                            } else {
+                                let val = self.cache[usize::from(tru)];
+                                if val.is_none() {
+                                    todo.push(expr_id);
+                                    todo.push(tru);
                                 }
                                 val.clone()
                             }
@@ -307,7 +323,7 @@ impl ExprEval {
     }
 
     #[inline]
-    fn eval(&mut self, e: ExecExprId, pin_values: &SignalValues, regs: &Regs) -> BitVecValue {
+    fn eval(&mut self, e: ExecExprId, pin_values: &SignalValues, regs: &Regs) -> Word {
         if let Some(e) = &self.cache[usize::from(e)] {
             e.clone()
         } else {
@@ -336,15 +352,18 @@ struct Transaction {
 
 #[derive(Debug, Clone)]
 enum ArgValue {
-    Scalar(BitVecValue),
-    Seq(Vec<BitVecValue>),
+    Scalar(Word),
+    Seq(Vec<Word>),
 }
 
 impl ArgValue {
     fn empty(st: &SymbolTable, arg: &Arg) -> Self {
         match st[arg.symbol()].tpe() {
-            Type::UnsignedInt => Self::Scalar(BitVecValue::zero(64)),
-            Type::BitVec(w) => Self::Scalar(BitVecValue::zero(w)),
+            Type::UnsignedInt => Self::Scalar(0),
+            Type::BitVec(w) => {
+                assert!(w <= Word::BITS);
+                Self::Scalar(0)
+            }
             Type::Seq(_) => Self::Seq(vec![]),
             Type::Tuple(_) => todo!("tuple"),
             Type::Struct(_) | Type::Unknown => unreachable!(),
@@ -354,15 +373,15 @@ impl ArgValue {
     #[inline]
     fn clear(&mut self) {
         match self {
-            ArgValue::Scalar(s) => s.clear(),
+            ArgValue::Scalar(s) => *s = 0,
             ArgValue::Seq(s) => s.clear(),
         }
     }
 
     #[inline]
-    fn learn(&mut self, value: BitVecValue) {
+    fn learn(&mut self, value: Word) {
         match self {
-            ArgValue::Scalar(s) => s.assign(&value),
+            ArgValue::Scalar(s) => *s = value,
             ArgValue::Seq(s) => s.push(value),
         }
     }
@@ -388,14 +407,14 @@ impl ArgValue {
 
 #[inline]
 fn serialize_bit_vec(
-    value: &BitVecValue,
+    value: &Word,
     out: &mut impl Write,
     format: &TraceFormat,
 ) -> std::io::Result<()> {
     if format.display_hex {
-        write!(out, "0x{}", value.to_hex_str())
+        write!(out, "0x{value:x}")
     } else {
-        write!(out, "{}", value.to_dec_str())
+        write!(out, "{value}")
     }
 }
 
@@ -487,13 +506,7 @@ impl<O: Write> TraceMonitor<O> {
         Ok(())
     }
 
-    fn learn_param(
-        &mut self,
-        instance: InstanceId,
-        arg_idx: usize,
-        value: BitVecValue,
-        _step: u32,
-    ) {
+    fn learn_param(&mut self, instance: InstanceId, arg_idx: usize, value: Word, _step: u32) {
         let tran_idx = self.transaction_id(instance);
         let tran = &mut self.transactions[tran_idx];
         // debug_assert!(tran.active);
@@ -510,7 +523,7 @@ impl<O: Write> TraceMonitor<O> {
 struct Compiler {
     states: Vec<ExecState>,
     expr: Vec<ExecExpr>,
-    regs: Vec<BitVecValue>,
+    regs: Vec<Word>,
     heads: Vec<(usize, usize)>,
     port_symbol_to_index: FxHashMap<SymbolId, usize>,
     reg_symbol_to_index_and_instance: FxHashMap<SymbolId, (usize, InstanceId)>,
@@ -587,7 +600,7 @@ impl Compiler {
             let Expr::BVLiteral(init_value) = &ctx[auto.register_inits[&reg]] else {
                 panic!("Failed to find init value for {}", st[reg].full_name(st));
             };
-            self.regs.push(init_value.get(ctx).into());
+            self.regs.push(init_value.get(ctx).to_u64().unwrap());
         }
 
         // create mappings for dut pins
@@ -742,8 +755,10 @@ impl Compiler {
         if let Some(expr) = self.patronus_expr_map.get(&e) {
             *expr
         } else {
+            let width = e.get_bv_type(ctx).unwrap();
+            let mask = (1u64 << width) - 1;
             let expr = match &ctx[e] {
-                Expr::BVLiteral(v) => ExecExpr::Lit(v.get(ctx).into()),
+                Expr::BVLiteral(v) => ExecExpr::Lit(v.get(ctx).to_u64().unwrap()),
                 Expr::BVSymbol { .. } => unreachable!(
                     "Symbols should be handled earlier: {}",
                     e.serialize_to_str(ctx)
@@ -755,42 +770,43 @@ impl Compiler {
                 &Expr::BVOr(a, b, _) => {
                     let a = self.compile_expr(ctx, a);
                     let b = self.compile_expr(ctx, b);
-                    ExecExpr::Bin(BOp::Or, a, b)
+                    ExecExpr::Bin(BOp::Or, a, b, mask)
                 }
                 &Expr::BVAnd(a, b, _) => {
                     let a = self.compile_expr(ctx, a);
                     let b = self.compile_expr(ctx, b);
-                    ExecExpr::Bin(BOp::And, a, b)
+                    ExecExpr::Bin(BOp::And, a, b, mask)
                 }
                 &Expr::BVXor(a, b, _) => {
                     let a = self.compile_expr(ctx, a);
                     let b = self.compile_expr(ctx, b);
-                    ExecExpr::Bin(BOp::Xor, a, b)
+                    ExecExpr::Bin(BOp::Xor, a, b, mask)
                 }
                 &Expr::BVAdd(a, b, _) => {
                     let a = self.compile_expr(ctx, a);
                     let b = self.compile_expr(ctx, b);
-                    ExecExpr::Bin(BOp::Add, a, b)
+                    ExecExpr::Bin(BOp::Add, a, b, mask)
                 }
                 &Expr::BVSub(a, b, _) => {
                     let a = self.compile_expr(ctx, a);
                     let b = self.compile_expr(ctx, b);
-                    ExecExpr::Bin(BOp::Sub, a, b)
+                    ExecExpr::Bin(BOp::Sub, a, b, mask)
                 }
                 &Expr::BVEqual(a, b) => {
                     let a = self.compile_expr(ctx, a);
                     let b = self.compile_expr(ctx, b);
-                    ExecExpr::Bin(BOp::Equal, a, b)
+                    ExecExpr::Bin(BOp::Equal, a, b, mask)
                 }
                 &Expr::BVGreaterEqual(a, b) => {
                     let a = self.compile_expr(ctx, a);
                     let b = self.compile_expr(ctx, b);
-                    ExecExpr::Bin(BOp::GreaterEqual, a, b)
+                    ExecExpr::Bin(BOp::GreaterEqual, a, b, mask)
                 }
                 &Expr::BVConcat(a, b, _) => {
                     let a = self.compile_expr(ctx, a);
+                    let b_width = b.get_bv_type(ctx).unwrap();
                     let b = self.compile_expr(ctx, b);
-                    ExecExpr::Bin(BOp::Concat, a, b)
+                    ExecExpr::Bin(BOp::Concat, a, b, b_width as Word)
                 }
                 &Expr::BVSlice { e, hi, lo } => {
                     let e = self.compile_expr(ctx, e);
@@ -893,7 +909,7 @@ enum ExecAct {
 
 #[derive(Debug, PartialEq, Hash, Eq, Clone)]
 enum ExecExpr {
-    Lit(BitVecValue),
+    Lit(Word),
     /// look up register value
     Reg(usize, InstanceId),
     /// look up dut pin value
@@ -902,7 +918,7 @@ enum ExecExpr {
     Not(ExecExprId),
     Slice(ExecExprId, WidthInt, WidthInt),
     // binop
-    Bin(BOp, ExecExprId, ExecExprId),
+    Bin(BOp, ExecExprId, ExecExprId, Word),
     Ite(ExecExprId, ExecExprId, ExecExprId),
 }
 
