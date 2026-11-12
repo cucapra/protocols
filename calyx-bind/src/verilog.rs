@@ -522,9 +522,13 @@ fn action_to_verilog(
         Op::Fork => unreachable!("all forks should be gone!"),
         Op::InternalAssertFalse => {}
         Op::Done => writeln!(out, "{indent}// WARN: ignoring done")?,
-        Op::Finish(_) | Op::Start(_) | Op::LearnedParam(..) => {
-            unreachable!("unexpected op, should only be in monitor")
-        }
+        Op::Finish(instance) => writeln!(out, "{indent}// WARN: ignoring finish({instance:?})")?,
+        Op::Start(instance) => writeln!(out, "{indent}// WARN: ignoring start({instance:?})")?,
+        Op::LearnedParam(arg_idx, expr) => writeln!(
+            out,
+            "{indent}// WARN: ignoring learned(arg#{arg_idx} = {})",
+            expr_to_verilog(ctx, *expr, expr_names)
+        )?,
     }
     Ok(())
 }
