@@ -25,7 +25,7 @@ use protocols::frontend::symbol::{Arg, SymbolId, SymbolTable, Type};
 use protocols::ir::joint_automaton::ProtocolId;
 use protocols::ir::joint_monitor::{InstanceId, JointMonitorAutomaton};
 use protocols::ir::proto_graph::{Assignment, NodeId, Op, ProtoGraph};
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::io::Write;
 
 pub struct GraphBi<O: Write> {
@@ -62,7 +62,7 @@ impl<O: Write> GraphBi<O> {
         Self {
             current_state: monitor.control.graph.entry.as_u32() as usize,
             states: c.states,
-            expr: c.expr.into(),
+            expr: ExprEval::new(c.expr, c.reg_invalidates, c.pin_invalidates),
             regs: Regs::new(c.regs, c.heads),
             bad_state: monitor.bad_state.as_u32() as usize,
             mon: out,
@@ -90,25 +90,31 @@ impl<O: Write> GraphBi<O> {
 
 impl<O: Write> GraphBi<O> {
     fn exec_state(&mut self, state_id: usize, pin_values: SignalValues) -> std::io::Result<usize> {
-        let state = &self.states[state_id];
+        // invalidate expression cache
         self.expr
-            .eval_many(&state.unique_guards, &pin_values, &self.regs);
+            .update_pin_values_and_clear_cache(self.regs.changed(), pin_values);
+
+        // commit register updates
+        self.regs.commit();
+
+        let state = &self.states[state_id];
+        self.expr.eval_many(&state.unique_guards, &self.regs);
 
         // eval actions based on guards
         for (guard, act) in &state.acts {
-            let guard = self.expr.eval(*guard, &pin_values, &self.regs);
+            let guard = self.expr.eval(*guard, &self.regs);
             if guard != 0 {
                 match act.clone() {
                     ExecAct::InternalAssertFalse => {
                         panic!("Internal assertion failed! State {}", self.current_state)
                     }
                     ExecAct::AssignReg(idx, instance, value) => {
-                        let value = self.expr.eval(value, &pin_values, &self.regs);
+                        let value = self.expr.eval(value, &self.regs);
                         self.regs.write(idx, instance, value);
                     }
                     ExecAct::AssertEq(lhs, rhs) => {
-                        let lhs = self.expr.eval(lhs, &pin_values, &self.regs);
-                        let rhs = self.expr.eval(rhs, &pin_values, &self.regs);
+                        let lhs = self.expr.eval(lhs, &self.regs);
+                        let rhs = self.expr.eval(rhs, &self.regs);
                         let is_ok = lhs == rhs;
                         if !is_ok {
                             panic!("assertion failed");
@@ -126,7 +132,7 @@ impl<O: Write> GraphBi<O> {
                         self.regs.incr_head(proto_id, amount);
                     }
                     ExecAct::LearnedParam(instance, arg_idx, expr) => {
-                        let value = self.expr.eval(expr, &pin_values, &self.regs);
+                        let value = self.expr.eval(expr, &self.regs);
                         let instance = self.regs.eval_instance_id(instance);
                         self.mon.learn_param(instance, arg_idx, value, self.step);
                     }
@@ -138,14 +144,10 @@ impl<O: Write> GraphBi<O> {
         let next = state
             .trans
             .iter()
-            .find(|(g, _)| self.expr.eval(*g, &pin_values, &self.regs) != 0)
+            .find(|(g, _)| self.expr.eval(*g, &self.regs) != 0)
             .cloned()
             .unwrap()
             .1 as usize;
-
-        // invalidate expression cache
-        self.expr.clear_cache();
-
         Ok(next)
     }
 }
@@ -157,11 +159,13 @@ struct Regs {
     heads: Vec<(usize, usize)>,
     /// other registers
     regs: Vec<Word>,
+    next: Vec<Word>,
 }
 
 impl Regs {
     fn new(regs: Vec<Word>, heads: Vec<(usize, usize)>) -> Self {
-        Self { heads, regs }
+        let next = regs.clone();
+        Self { heads, regs, next }
     }
 
     #[inline]
@@ -172,13 +176,18 @@ impl Regs {
 
     #[inline]
     fn read(&self, idx: usize, instance: InstanceId) -> Word {
-        self.regs[self.reg_idx(idx, instance)].clone()
+        self.regs[self.reg_idx(idx, instance)]
     }
 
     #[inline]
     fn write(&mut self, idx: usize, instance: InstanceId, value: Word) {
         let final_idx = self.reg_idx(idx, instance);
-        self.regs[final_idx] = value;
+        self.next[final_idx] = value;
+    }
+
+    #[inline]
+    fn commit(&mut self) {
+        std::mem::swap(&mut self.next, &mut self.regs);
     }
 
     #[inline]
@@ -194,34 +203,80 @@ impl Regs {
         let instance = (base_instance + head) % count;
         (proto_id, instance)
     }
+
+    #[inline]
+    fn changed(&self) -> impl Iterator<Item = usize> {
+        self.regs
+            .iter()
+            .zip(self.next.iter())
+            .enumerate()
+            .flat_map(|(idx, (old, next))| (old != next).then(|| idx))
+    }
 }
 
 struct ExprEval {
     expr: Vec<ExecExpr>,
     cache: Vec<Option<Word>>,
+    pin_values: Vec<Word>,
     /// keep todo buffer around to avoid allocations
     todo: Vec<ExecExprId>,
+    pins_changed: Vec<usize>,
+    // keep track of invalidations
+    reg_invalidates: Vec<Vec<ExecExprId>>,
+    pin_invalidates: Vec<Vec<ExecExprId>>,
 }
 
-impl From<Vec<ExecExpr>> for ExprEval {
-    fn from(expr: Vec<ExecExpr>) -> Self {
+impl ExprEval {
+    fn new(
+        expr: Vec<ExecExpr>,
+        reg_invalidates: Vec<Vec<ExecExprId>>,
+        pin_invalidates: Vec<Vec<ExecExprId>>,
+    ) -> Self {
         let cache = vec![None; expr.len()];
         Self {
             expr,
             cache,
+            pin_values: Vec::new(),
+            pins_changed: Vec::new(),
             todo: Vec::with_capacity(1024),
-        }
-    }
-}
-
-impl ExprEval {
-    fn clear_cache(&mut self) {
-        for e in self.cache.iter_mut() {
-            *e = None;
+            reg_invalidates,
+            pin_invalidates,
         }
     }
 
-    fn eval_many(&mut self, expressions: &[ExecExprId], pin_values: &SignalValues, regs: &Regs) {
+    fn update_pin_values_and_clear_cache(
+        &mut self,
+        regs_changed: impl Iterator<Item = usize>,
+        pin_values: SignalValues,
+    ) {
+        debug_assert!(self.pins_changed.is_empty());
+        for (idx, value) in pin_values.iter().enumerate() {
+            let value = value.to_u64().unwrap();
+            if self.pin_values.len() > idx {
+                if self.pin_values[idx] != value {
+                    self.pin_values[idx] = value;
+                    for expr in &self.pin_invalidates[idx] {
+                        self.cache[usize::from(*expr)] = None;
+                    }
+                }
+            } else {
+                debug_assert_eq!(self.pin_values.len(), idx);
+                self.pin_values.push(value);
+                for expr in &self.pin_invalidates[idx] {
+                    self.cache[usize::from(*expr)] = None;
+                }
+            }
+        }
+
+        // clear for regs
+        for reg in regs_changed {
+            for expr in &self.reg_invalidates[reg] {
+                self.cache[usize::from(*expr)] = None;
+            }
+        }
+    }
+
+    fn eval_many(&mut self, expressions: &[ExecExprId], regs: &Regs) {
         debug_assert!(self.todo.is_empty());
         let mut todo = std::mem::take(&mut self.todo);
         todo.extend_from_slice(expressions);
@@ -231,7 +286,7 @@ impl ExprEval {
                 let new_expr = match self.expr[usize::from(expr_id)].clone() {
                     ExecExpr::Lit(v) => Some(v),
                     ExecExpr::Reg(idx, instance) => Some(regs.read(idx, instance)),
-                    ExecExpr::DutPin(idx) => Some(pin_values[idx].to_u64().unwrap()),
+                    ExecExpr::DutPin(idx) => Some(self.pin_values[idx]),
                     ExecExpr::Not(e) if let Some(e) = self.cache[usize::from(e)] => Some(!e),
                     ExecExpr::Not(e) => {
                         todo.push(expr_id);
@@ -323,11 +378,11 @@ impl ExprEval {
     }
 
     #[inline]
-    fn eval(&mut self, e: ExecExprId, pin_values: &SignalValues, regs: &Regs) -> Word {
+    fn eval(&mut self, e: ExecExprId, regs: &Regs) -> Word {
         if let Some(e) = &self.cache[usize::from(e)] {
             e.clone()
         } else {
-            self.eval_many(&[e], pin_values, regs);
+            self.eval_many(&[e], regs);
             self.cache[usize::from(e)].clone().unwrap()
         }
     }
@@ -529,6 +584,16 @@ struct Compiler {
     reg_symbol_to_index_and_instance: FxHashMap<SymbolId, (usize, InstanceId)>,
     patronus_expr_map: FxHashMap<ExprRef, ExecExprId>,
     simplifier: Simplifier<SparseExprMap<Option<ExprRef>>>,
+    // track expression dependencies
+    dependencies: Vec<FxHashSet<Dep>>,
+    reg_invalidates: Vec<Vec<ExecExprId>>,
+    pin_invalidates: Vec<Vec<ExecExprId>>,
+}
+
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+enum Dep {
+    Reg(usize),
+    Pin(usize),
 }
 
 impl Default for Compiler {
@@ -542,6 +607,9 @@ impl Default for Compiler {
             reg_symbol_to_index_and_instance: Default::default(),
             patronus_expr_map: Default::default(),
             simplifier: Simplifier::new(SparseExprMap::default()),
+            dependencies: vec![],
+            reg_invalidates: vec![],
+            pin_invalidates: vec![],
         }
     }
 }
@@ -556,11 +624,36 @@ impl Compiler {
         self.reg_symbol_to_index_and_instance.clear();
         self.patronus_expr_map.clear();
         self.simplifier = Simplifier::new(SparseExprMap::default());
+        self.reg_invalidates.clear();
+        self.pin_invalidates.clear();
     }
 
     fn add_expr(&mut self, expr_ref: ExprRef, expr: ExecExpr) -> ExecExprId {
         let id = self.expr.len().into();
         self.patronus_expr_map.insert(expr_ref, id);
+
+        // track dependencies
+        let deps = match &expr {
+            ExecExpr::Lit(_) => FxHashSet::default(),
+            ExecExpr::Reg(idx, _) => FxHashSet::from_iter([Dep::Reg(*idx)].into_iter()),
+            ExecExpr::DutPin(idx) => FxHashSet::from_iter([Dep::Pin(*idx)].into_iter()),
+            ExecExpr::Not(e) => self.dependencies[usize::from(*e)].clone(),
+            ExecExpr::Slice(e, _, _) => self.dependencies[usize::from(*e)].clone(),
+            ExecExpr::Bin(_, a, b, _) => {
+                let a = &self.dependencies[usize::from(*a)];
+                let b = &self.dependencies[usize::from(*b)];
+                FxHashSet::from_iter(a.union(b).cloned())
+            }
+            ExecExpr::Ite(c, t, f) => {
+                let c = &self.dependencies[usize::from(*c)];
+                let t = &self.dependencies[usize::from(*t)];
+                let f = &self.dependencies[usize::from(*f)];
+                FxHashSet::from_iter(FxHashSet::from_iter(c.union(t).cloned()).union(f).cloned())
+            }
+        };
+        assert_eq!(self.dependencies.len(), self.expr.len());
+        self.dependencies.push(deps);
+
         self.expr.push(expr);
         id
     }
@@ -619,6 +712,20 @@ impl Compiler {
                 self.compile_state(st, ctx, &auto.control.graph, &auto.action_owners, node_id);
             assert_eq!(idx, self.states.len());
             self.states.push(state);
+        }
+
+        // calculate invalidations
+        self.reg_invalidates.resize(self.regs.len(), Vec::new());
+        let num_ports = port_map.values().max().unwrap() + 1;
+        self.pin_invalidates.resize(num_ports, Vec::new());
+        for (expr_idx, deps) in self.dependencies.iter().enumerate() {
+            let expr_id = ExecExprId::from(expr_idx);
+            for dep in deps {
+                match dep {
+                    Dep::Reg(idx) => self.reg_invalidates[*idx].push(expr_id),
+                    Dep::Pin(idx) => self.pin_invalidates[*idx].push(expr_id),
+                }
+            }
         }
     }
 
