@@ -14,7 +14,7 @@
 //   and then compile expressions to byte code that contains the concrete indices
 
 use crate::TraceFormat;
-use baa::BitVecOps;
+use baa::{BitVecOps, DoubleWord};
 use bi::signal_trace::{PortMap, SignalValues};
 use patronus::expr::{
     Context, Expr, ExprRef, SerializableIrNode, Simplifier, SparseExprMap, TypeCheck, WidthInt,
@@ -152,7 +152,7 @@ impl<O: Write> GraphBi<O> {
     }
 }
 
-type Word = u64;
+type Word = u128;
 
 struct Regs {
     /// per protocol head counters
@@ -254,7 +254,7 @@ impl ExprEval {
     ) {
         debug_assert!(self.pins_changed.is_empty());
         for (idx, value) in pin_values.iter().enumerate() {
-            let value = value.to_u64().unwrap();
+            let value = value.to_u64().unwrap() as Word;
             if self.pin_values.len() > idx {
                 if self.pin_values[idx] != value {
                     self.pin_values[idx] = value;
@@ -300,7 +300,7 @@ impl ExprEval {
                     }
                     ExecExpr::Slice(e, hi, lo) if let Some(e) = self.cache[usize::from(e)] => {
                         let width = hi - lo + 1;
-                        let mask = (1u64 << width) - 1;
+                        let mask = ((1 as Word) << width) - 1;
                         Some((e >> lo) & mask)
                     }
                     ExecExpr::Slice(e, ..) => {
@@ -713,7 +713,8 @@ impl Compiler {
             let Expr::BVLiteral(init_value) = &ctx[auto.register_inits[&reg]] else {
                 panic!("Failed to find init value for {}", st[reg].full_name(st));
             };
-            self.regs.push(init_value.get(ctx).to_u64().unwrap());
+            self.regs
+                .push(init_value.get(ctx).to_u64().unwrap() as Word);
         }
 
         // create mappings for dut pins
@@ -883,9 +884,18 @@ impl Compiler {
             *expr
         } else {
             let width = e.get_bv_type(ctx).unwrap();
-            let mask = (1u64 << width) - 1;
+            assert!(
+                width <= Word::BITS,
+                "{width}-bit expression not supported: {}",
+                e.serialize_to_str(ctx)
+            );
+            let mask = if width == Word::BITS {
+                Word::MAX
+            } else {
+                ((1 as Word) << width) - 1
+            };
             let expr = match &ctx[e] {
-                Expr::BVLiteral(v) => ExecExpr::Lit(v.get(ctx).to_u64().unwrap()),
+                Expr::BVLiteral(v) => ExecExpr::Lit(v.get(ctx).to_u64().unwrap() as Word),
                 Expr::BVSymbol { .. } => unreachable!(
                     "Symbols should be handled earlier: {}",
                     e.serialize_to_str(ctx)
