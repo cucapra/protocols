@@ -87,7 +87,7 @@ digraph "send_data" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] assert_eq(D.valid, 1)\n[1] $monitor_data_value := D.data"];
+  node0 [label="[1] assert_eq(D.valid, 1)\n[1] $monitor_data_value := D.data\n[1] learned(0, D.data)"];
   node0 -> node1 [label="not(D.ready) / step"];
   node0 -> node2 [label="D.ready / step"];
   node1 [label="[1] assert_eq(D.valid, 1)\n[1] assert_eq($monitor_data_value, D.data)"];

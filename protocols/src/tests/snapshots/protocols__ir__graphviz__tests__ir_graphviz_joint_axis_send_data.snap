@@ -22,11 +22,11 @@ digraph "send_data" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] done\n[1] $monitor_data_value#0_send_data := D.m_axis_tdata"];
+  node0 [label="[1] done\n[1] $monitor_data_value#0_send_data := D.m_axis_tdata\n[1] learned(0, D.m_axis_tdata)\n[D.m_axis_tvalid] start(0_0)\n[and(D.m_axis_tvalid, D.m_axis_tready)] finish(0_0)"];
   node0 -> node1 [label="and(not(D.m_axis_tready), D.m_axis_tvalid) / step"];
   node0 -> node0 [label="and(D.m_axis_tready, D.m_axis_tvalid) / step / R_send_data"];
   node0 -> node2 [label="not(D.m_axis_tvalid) / step"];
-  node1 [label=""];
+  node1 [label="[and(and(D.m_axis_tvalid, eq($monitor_data_value#0_send_data, D.m_axis_tdata)), D.m_axis_tready)] finish(0_0)"];
   node1 -> node1 [label="and(not(D.m_axis_tready), and(D.m_axis_tvalid, eq($monitor_data_value#0_send_data, D.m_axis_tdata))) / step"];
   node1 -> node0 [label="and(D.m_axis_tready, and(D.m_axis_tvalid, eq($monitor_data_value#0_send_data, D.m_axis_tdata))) / step / R_send_data"];
   node1 -> node2 [label="not(and(D.m_axis_tvalid, eq($monitor_data_value#0_send_data, D.m_axis_tdata))) / step"];
