@@ -213,7 +213,7 @@ impl Regs {
             .iter()
             .zip(self.next.iter())
             .enumerate()
-            .flat_map(|(idx, (old, next))| (old != next).then(|| idx))
+            .flat_map(|(idx, (old, next))| (old != next).then_some(idx))
     }
 }
 
@@ -358,14 +358,14 @@ impl ExprEval {
                                     todo.push(expr_id);
                                     todo.push(fals);
                                 }
-                                val.clone()
+                                val
                             } else {
                                 let val = self.cache[usize::from(tru)];
                                 if val.is_none() {
                                     todo.push(expr_id);
                                     todo.push(tru);
                                 }
-                                val.clone()
+                                val
                             }
                         } else {
                             todo.push(expr_id);
@@ -385,10 +385,10 @@ impl ExprEval {
     #[inline]
     fn eval(&mut self, e: ExecExprId, regs: &Regs) -> Word {
         if let Some(e) = &self.cache[usize::from(e)] {
-            e.clone()
+            *e
         } else {
             self.eval_many(&[e], regs);
-            self.cache[usize::from(e)].clone().unwrap()
+            self.cache[usize::from(e)].unwrap()
         }
     }
 }
@@ -654,8 +654,8 @@ impl Compiler {
         // track dependencies
         let deps = match &expr {
             ExecExpr::Lit(_) => FxHashSet::default(),
-            ExecExpr::Reg(idx, _) => FxHashSet::from_iter([Dep::Reg(*idx)].into_iter()),
-            ExecExpr::DutPin(idx) => FxHashSet::from_iter([Dep::Pin(*idx)].into_iter()),
+            ExecExpr::Reg(idx, _) => FxHashSet::from_iter([Dep::Reg(*idx)]),
+            ExecExpr::DutPin(idx) => FxHashSet::from_iter([Dep::Pin(*idx)]),
             ExecExpr::Not(e, ..) => self.dependencies[usize::from(*e)].clone(),
             ExecExpr::Slice(e, _, _) => self.dependencies[usize::from(*e)].clone(),
             ExecExpr::Bin(_, a, b, _) => {
