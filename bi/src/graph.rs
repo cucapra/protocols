@@ -476,17 +476,18 @@ fn serialize_bit_vec(
     format: &TraceFormat,
 ) -> std::io::Result<()> {
     if format.display_hex {
-        // for hex values we need to pad with zeros
-        let leading_zeros = value.leading_zeros() - (Word::BITS - width);
-        let num_zeros = leading_zeros / 4;
-        write!(out, "0x")?;
-        for _ in 0..num_zeros {
-            write!(out, "0")?;
+        if *value == 0 {
+            write!(out, "0x0")
+        } else {
+            // for hex values we need to pad with zeros
+            let leading_zeros = value.leading_zeros() - (Word::BITS - width);
+            let num_zeros = leading_zeros / 4;
+            write!(out, "0x")?;
+            for _ in 0..num_zeros {
+                write!(out, "0")?;
+            }
+            write!(out, "{value:x}")
         }
-        if *value != 0 {
-            write!(out, "{value:x}")?;
-        }
-        Ok(())
     } else {
         write!(out, "{value}")
     }
