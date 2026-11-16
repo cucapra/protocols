@@ -16,3 +16,4 @@ baa.workspace = true
 wellen.workspace = true
 rustc-hash.workspace = true
 rand.workspace = true
+patronus.workspace = true

@@ -1,0 +1,6 @@
+// trace 0
+trace {
+    idle(); [0]
+    read(0x00000001, 0x0badda7a, 0x0, 0x1); [1 .. 4]
+    idle(); [5]
+}

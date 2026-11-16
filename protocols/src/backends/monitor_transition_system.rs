@@ -25,6 +25,7 @@ pub struct MonitorTransitionSystemResult {
 }
 
 /// set up the monitor ring-buffers with value, knownness registers, any other state.
+/// ProtocolId -> RegisterIdx -> Slot -> Corresponding Register Symbol Id
 fn bank_fields(monitor: &JointMonitorAutomaton) -> Vec<Vec<Vec<SymbolId>>> {
     let mut owned = FxHashSet::default();
     let fields = monitor
@@ -175,6 +176,9 @@ pub fn into_monitor_transition_system(
                     panic!("monitor constraints must be lowered into edge guards")
                 }
                 Op::Fork | Op::Done | Op::InternalAssertFalse => {}
+                Op::LearnedParam(..) => todo!("learned param"),
+                Op::Finish(..) => todo!("finish op"),
+                Op::Start(..) => todo!("start op"),
             }
         }
 

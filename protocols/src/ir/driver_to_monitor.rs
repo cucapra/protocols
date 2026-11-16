@@ -488,6 +488,10 @@ impl Converter<'_> {
                         simplify_guarded(self.ctx, &mut self.graph.simplifier, rhs, action.guard);
                     Op::AssertEq(lhs, rhs)
                 }
+                Op::LearnedParam(idx, e) => {
+                    let e = simplify_guarded(self.ctx, &mut self.graph.simplifier, e, action.guard);
+                    Op::LearnedParam(idx, e)
+                }
                 op => op,
             };
             let op = op.remap(self.ctx, &values, &FxHashMap::default());
@@ -689,8 +693,15 @@ impl Converter<'_> {
                     self.observe_equality(node, action.guard, lhs, rhs, &mut env, &mut actions)?;
                 }
                 // retain all other ops as is.
-                op @ (Op::Fork | Op::Done | Op::InternalAssertFalse) => {
+                op @ (Op::Fork
+                | Op::Done
+                | Op::InternalAssertFalse
+                | Op::Finish(..)
+                | Op::Start(..)) => {
                     self.emit(&mut actions, action.guard, op);
+                }
+                Op::LearnedParam(..) => {
+                    unreachable!("learned param is a monitor op, should not appear in driver")
                 }
             }
         }
@@ -734,6 +745,20 @@ impl Converter<'_> {
                     Op::Assign(register, assignment),
                 );
             }
+            // emit if fully learned
+            let width = binding.known.get_bv_type(self.ctx).unwrap();
+            let ones = self.ctx.ones(width);
+            let fully_known_now = self.ctx.equal(binding.known, ones);
+            let reg_sym = self.knownness_registers[&argument];
+            let reg_expr = self.graph.symbol_expr[&reg_sym];
+            let fully_known_prev = self.ctx.equal(reg_expr, ones);
+            let not_fully_known_prev = self.ctx.not(fully_known_prev);
+            let capture = loads.get(&index).copied().unwrap_or(self.ctx.get_false());
+            let learned = self.ctx.or(not_fully_known_prev, capture);
+            let learned = self.ctx.and(fully_known_now, learned);
+            let new_value = binding.value;
+            let op = Op::LearnedParam(index, new_value);
+            self.emit(&mut actions, learned, op);
         }
         self.graph.node_mut(node).actions = actions;
         Ok(matches)
@@ -780,7 +805,7 @@ impl Converter<'_> {
     }
 
     /// This is the "workhorse" method for driver to monitor conversion,
-    /// which solves for the parameter to generate an equality constriant.
+    /// which solves for the parameter to generate an equality constraint.
     #[allow(clippy::too_many_arguments)]
     fn observe_range(
         &mut self,
@@ -827,18 +852,41 @@ impl Converter<'_> {
                         }
                     };
 
+                let mut offset_part = self.ctx.slice(offset, hi, lo);
                 if lo != 0 {
-                    // dropping low bits is safe only when the offset cannot carry out of them
+                    // account for carry out of the omitted low bits
                     let low_offset = self.ctx.slice(offset, lo - 1, 0);
                     let low_offset = self.graph.simplifier.simplify(self.ctx, low_offset);
                     if low_offset != self.ctx.zero(lo) {
-                        return Err(self.unsupported(
-                            node,
-                            "sliced additions with nonzero omitted offset bits are unsupported",
-                        ));
+                        let mut operand = unknown;
+                        let mut parameter_lo = 0;
+                        while let Expr::BVSlice { e, lo, .. } = self.ctx[operand] {
+                            operand = e;
+                            parameter_lo += lo;
+                        }
+                        let Some(&parameter) = self.parameter_exprs.get(&operand) else {
+                            return Err(self.unsupported(
+                                node,
+                                "sliced additions with a carry require a parameter or parameter slice operand",
+                            ));
+                        };
+                        let binding = env[parameter];
+                        let known =
+                            self.ctx
+                                .slice(binding.known, parameter_lo + lo - 1, parameter_lo);
+                        let ones = self.ctx.ones(lo);
+                        self.emit(actions, guard, Op::AssertEq(known, ones));
+                        let low_value =
+                            self.ctx
+                                .slice(binding.value, parameter_lo + lo - 1, parameter_lo);
+                        let low_value = self.ctx.zero_extend(low_value, 1);
+                        let low_offset = self.ctx.zero_extend(low_offset, 1);
+                        let sum = self.ctx.add(low_value, low_offset);
+                        let carry = self.ctx.slice(sum, lo, lo);
+                        let carry = self.ctx.zero_extend(carry, hi - lo);
+                        offset_part = self.ctx.add(offset_part, carry);
                     }
                 }
-                let offset_part = self.ctx.slice(offset, hi, lo);
                 let observed = self.ctx.sub(sample, offset_part);
                 self.observe_range(node, guard, observed, unknown, (hi, lo), env, actions)?;
             }

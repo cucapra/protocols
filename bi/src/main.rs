@@ -7,7 +7,10 @@ mod bi;
 mod constraints;
 mod proto_trace;
 
+mod graph;
+
 use crate::bi::*;
+use crate::graph::{GraphBi, TraceMonitor};
 use crate::proto_trace::*;
 use crate::signal_trace::*;
 use ::bi::{Instance, signal_trace};
@@ -16,9 +19,12 @@ use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::{Verbosity, WarnLevel};
 use protocols::frontend;
 use protocols::frontend::Module;
-use protocols::frontend::ast::Clock;
+use protocols::frontend::ast::{Clock, Protocol};
 use protocols::frontend::diagnostic::{DiagnosticHandler, Level};
+use protocols::frontend::symbol::SymbolTable;
+use protocols::ir::joint_monitor::build_joint_monitor_automaton;
 use rustc_hash::{FxHashMap, FxHashSet};
+use std::io::Write;
 
 /// Args for the monitor CLI
 #[derive(Parser, Debug)]
@@ -101,6 +107,18 @@ struct Cli {
     /// measurements to stderr once the BI finishes
     #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..))]
     print_time_every_n_cycles: Option<u32>,
+
+    #[arg(
+        long,
+        help = "Use the graph IR lowering to build a monitor and execute it."
+    )]
+    graph: bool,
+
+    #[arg(
+        long,
+        help = "Show monitor IR before executing. Only has an effect with `--graph`"
+    )]
+    show_graph: bool,
 }
 
 fn add_inst_name(i: &Instance, name: &str) -> String {
@@ -114,7 +132,7 @@ fn add_inst_name(i: &Instance, name: &str) -> String {
 fn get_clock(
     modules: &[Module],
     instances: &[Instance],
-    cli_sample_posedge: Option<String>,
+    cli_sample_posedge: Option<&str>,
 ) -> WaveSamplingMode {
     let mut clocks: Vec<Clock> = instances
         .iter()
@@ -126,7 +144,7 @@ fn get_clock(
         .collect();
 
     if let Some(name) = cli_sample_posedge {
-        clocks.push(Clock::PosEdge(name));
+        clocks.push(Clock::PosEdge(name.to_string()));
     }
     clocks.sort();
     clocks.dedup();
@@ -147,7 +165,7 @@ fn main() {
     // Parse CLI args
     let cli = Cli::parse();
 
-    if let Some(tu) = cli.time_unit
+    if let Some(tu) = cli.time_unit.as_deref()
         && tu != "ns"
     {
         eprintln!(
@@ -161,7 +179,7 @@ fn main() {
     let show_warnings = false;
     let skip_static_step_fork_checks = false;
     let mut d = DiagnosticHandler::new(cli.color, false, show_warnings, false);
-    let (st, modules) = frontend(
+    let (mut st, modules) = frontend(
         &cli.protocol,
         &mut d,
         skip_static_step_fork_checks,
@@ -182,19 +200,170 @@ fn main() {
         .map(|arg| parse_instance(&modules, arg))
         .collect();
 
-    let sampling_mode = get_clock(&modules, &instances, cli.sample_posedge);
+    let sampling_mode = get_clock(&modules, &instances, cli.sample_posedge.as_deref());
 
     let bi_protos: Vec<Vec<_>> = instances
         .iter()
         .map(|inst| modules[inst.module_id].protos.clone())
         .collect();
 
+    let at_least_one_has_failed = if cli.graph {
+        graph_bi(
+            &mut st,
+            &mut d,
+            &cli,
+            &instances,
+            &modules,
+            sampling_mode,
+            bi_protos,
+        )
+    } else {
+        classic_bi(
+            &st,
+            &mut d,
+            &cli,
+            &instances,
+            &modules,
+            sampling_mode,
+            bi_protos,
+        )
+    };
+
+    if at_least_one_has_failed.unwrap() {
+        std::process::exit(1);
+    } else {
+        std::process::exit(0);
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn graph_bi(
+    st: &mut SymbolTable,
+    d: &mut DiagnosticHandler,
+    cli: &Cli,
+    instances: &[Instance],
+    modules: &[Module],
+    sampling_mode: WaveSamplingMode,
+    mut bi_protos: Vec<Vec<Protocol>>,
+) -> Result<bool, String> {
+    // only one instance
+    assert_eq!(instances.len(), bi_protos.len());
+    if bi_protos.len() != 1 {
+        todo!("the graph bi currently only supports a single instance!")
+    };
+    let protos = bi_protos.pop().unwrap();
+
+    let mut ctx = patronus::expr::Context::default();
+    let monitor = build_joint_monitor_automaton(&mut ctx, protos, st).map_err(|e| e.to_string())?;
+    let trace_monitor = TraceMonitor::new(&monitor.protocols, cli.into(), std::io::stdout())
+        .map_err(|e| e.to_string())?;
+
+    // try to parse FST, VCD or GHW file
+    if let Ok(mut trace) = WaveSignalTrace::open(
+        &cli.wave,
+        st,
+        modules,
+        instances,
+        sampling_mode,
+        cli.force_x_to_zero,
+    ) {
+        let bi = GraphBi::new(
+            st,
+            &mut ctx,
+            trace.port_map(),
+            monitor,
+            cli.show_graph,
+            trace_monitor,
+        );
+        run_graph_bi_with_trace(&mut trace, bi, d, cli.print_time_every_n_cycles)
+    } else {
+        // otherwise, we might be dealing with our own custom ASCI format
+        let mut trace =
+            AsciWaveTrace::open(&cli.wave, modules, instances, cli.force_x_to_zero).unwrap();
+        let bi = GraphBi::new(
+            st,
+            &mut ctx,
+            trace.port_map(),
+            monitor,
+            cli.show_graph,
+            trace_monitor,
+        );
+        run_graph_bi_with_trace(&mut trace, bi, d, cli.print_time_every_n_cycles)
+    }
+}
+
+fn run_graph_bi_with_trace<O: Write>(
+    trace: &mut impl SignalTrace,
+    mut bi: GraphBi<O>,
+    _d: &mut DiagnosticHandler,
+    print_time_every_n_cycles: Option<u32>,
+) -> Result<bool, String> {
+    let start = std::time::Instant::now();
+    let mut num_cycles_till_snapshot = 0u32;
+    if print_time_every_n_cycles.is_some() {
+        eprintln!("step,elapsed_us");
+    }
+    trace.stream_steps(|step_id, values| {
+        let _ = bi.exec_step(values.clone());
+
+        if let Some(n) = print_time_every_n_cycles {
+            if num_cycles_till_snapshot == 0 {
+                eprintln!("{step_id},{}", start.elapsed().as_micros());
+                num_cycles_till_snapshot = n;
+            }
+            num_cycles_till_snapshot -= 1;
+        }
+
+        if bi.has_failed() {
+            CallbackResult::Stop
+        } else {
+            CallbackResult::Continue
+        }
+    })?;
+
+    let has_failed = bi.has_failed();
+    bi.finish().unwrap();
+
+    Ok(has_failed)
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct TraceFormat {
+    status_only: bool,
+    include_idle: bool,
+    show_steps: bool,
+    show_waveform_time: bool,
+    display_hex: bool,
+}
+
+impl From<&Cli> for TraceFormat {
+    fn from(cli: &Cli) -> Self {
+        Self {
+            status_only: cli.status_only,
+            include_idle: cli.include_idle,
+            show_steps: cli.show_steps,
+            show_waveform_time: cli.show_waveform_time,
+            display_hex: cli.display_hex,
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn classic_bi(
+    st: &SymbolTable,
+    d: &mut DiagnosticHandler,
+    cli: &Cli,
+    instances: &[Instance],
+    modules: &[Module],
+    sampling_mode: WaveSamplingMode,
+    bi_protos: Vec<Vec<Protocol>>,
+) -> Result<bool, String> {
     let mut bis: Vec<_> = instances
         .iter()
         .enumerate()
         .zip(bi_protos.iter())
-        .map(|((inst_id, inst), protos)| {
-            BackwardsInterpreter::new(&st, protos, inst_id as u32, cli.include_in_progress)
+        .map(|((inst_id, _), protos)| {
+            BackwardsInterpreter::new(st, protos, inst_id as u32, cli.include_in_progress)
         })
         .collect();
 
@@ -202,9 +371,9 @@ fn main() {
         // try to parse FST, VCD or GHW file
         if let Ok(mut trace) = WaveSignalTrace::open(
             &cli.wave,
-            &st,
-            &modules,
-            &instances,
+            st,
+            modules,
+            instances,
             sampling_mode,
             cli.force_x_to_zero,
         ) {
@@ -216,7 +385,7 @@ fn main() {
         } else {
             // otherwise, we might be dealing with our own custom ASCI format
             let mut trace =
-                AsciWaveTrace::open(&cli.wave, &modules, &instances, cli.force_x_to_zero).unwrap();
+                AsciWaveTrace::open(&cli.wave, modules, instances, cli.force_x_to_zero).unwrap();
             run_bis(
                 bis.as_mut_slice(),
                 &mut trace,
@@ -265,14 +434,9 @@ fn main() {
                 let trace_id = failures[fail_indices[0]].0;
                 let mut proto_trace = bi.protocol_traces().get_trace(trace_id);
                 proto_trace.retain(|ProtoCall { name, .. }| !exclude_from_trace.contains(name));
-                print_trace(
-                    ii,
-                    &proto_trace,
-                    cli.show_steps,
-                    cli.show_waveform_time,
-                    cli.display_hex,
-                    |step| step_to_time.step_to_ns(step),
-                );
+                print_trace(ii, &proto_trace, cli.into(), |step| {
+                    step_to_time.step_to_ns(step)
+                });
 
                 for fail_idx in fail_indices {
                     if ii > 0 {
@@ -306,23 +470,14 @@ fn main() {
                 if ii > 0 {
                     println!();
                 }
-                print_trace(
-                    ii,
-                    &proto_trace,
-                    cli.show_steps,
-                    cli.show_waveform_time,
-                    cli.display_hex,
-                    |step| step_to_time.step_to_ns(step),
-                );
+                print_trace(ii, &proto_trace, cli.into(), |step| {
+                    step_to_time.step_to_ns(step)
+                });
             }
         }
     }
 
-    if at_least_one_has_failed {
-        std::process::exit(1);
-    } else {
-        std::process::exit(0);
-    }
+    Ok(at_least_one_has_failed)
 }
 
 fn run_bis(
@@ -365,14 +520,7 @@ fn run_bis(
     Ok(trace.step_to_time())
 }
 
-fn print_trace(
-    ii: usize,
-    trace: &ProtoTrace,
-    show_steps: bool,
-    show_time: bool,
-    display_hex: bool,
-    get_ns: impl Fn(u32) -> String,
-) {
+fn print_trace(ii: usize, trace: &ProtoTrace, format: TraceFormat, get_ns: impl Fn(u32) -> String) {
     println!("// trace {ii}");
     println!("trace {{");
     for ProtoCall {
@@ -388,10 +536,10 @@ fn print_trace(
             if !is_first {
                 print!(", ");
             }
-            print!("{}", arg.to_string(display_hex));
+            print!("{}", arg.to_string(format.display_hex));
         }
         print!(");");
-        if show_steps {
+        if format.show_steps {
             if let Some(end) = end {
                 if start == end {
                     println!(" [{start}]");
@@ -401,7 +549,7 @@ fn print_trace(
             } else {
                 println!(" [{start} .. ]");
             }
-        } else if show_time {
+        } else if format.show_waveform_time {
             if let Some(end) = end {
                 // the original monitor always shows the time of the next time step as end time
                 println!("  // [time: {} -> {}]", get_ns(*start), get_ns(*end + 1));

@@ -20,6 +20,7 @@ pub enum JointAutomatonError {
     UnsupportedProtocol { protocol: String, reason: String },
 }
 
+use crate::ir::joint_monitor::InstanceId;
 pub use JointAutomatonError as JointDriverError;
 
 /// One transaction contributing actions to a joint control node.
@@ -31,6 +32,12 @@ pub struct JointInstance {
     pub control: NodeId,
     /// This cycle starts a fresh transaction in the slot.
     pub starts: bool,
+}
+
+impl From<&JointInstance> for InstanceId {
+    fn from(value: &JointInstance) -> Self {
+        (value.protocol, value.slot)
+    }
 }
 
 /// Annotate Transitions with a meta-type that is agnostic of how it is implemented
@@ -270,6 +277,7 @@ fn add_transition(
         .filter(|(_, amount)| **amount != 0)
         .map(|(protocol, &amount)| TransitionRotation {
             protocol: protocols[protocol].name.clone(),
+            proto_id: protocol,
             amount,
         })
         .collect();
@@ -382,6 +390,23 @@ pub fn prepare_joint_protocols(
             lowerer.ir
         })
         .collect())
+}
+
+/// Identifies all nodes and conditions under which the protocol is finishing in the current step.
+pub(crate) fn find_finish_nodes(ctx: &Context, pg: &ProtoGraph) -> Vec<(NodeId, ExprRef)> {
+    let mut done_nodes = pg.find_done_nodes(ctx);
+    assert_eq!(
+        done_nodes.len(),
+        1,
+        "there always should be exactly one done node"
+    );
+    let (done_cond, done_node) = done_nodes.pop().unwrap();
+    assert_eq!(done_cond, ctx.get_true(), "done should always be active");
+    assert!(
+        pg[done_node].transitions.is_empty(),
+        "at this point the node with the done action should not have any further transitions"
+    );
+    pg.find_prev_nodes(ctx, done_node)
 }
 
 /// build a joint control automaton, agnostic to whether it's a driver or a monitor

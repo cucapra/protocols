@@ -147,6 +147,11 @@ fn format_op(
         Op::Fork => "fork".to_string(),
         Op::InternalAssertFalse => "internal_assert_false".to_string(),
         Op::Done => "done".to_string(),
+        Op::LearnedParam(arg, value) => {
+            format!("learned({arg}, {})", format_expr(ctx, protocol, *value))
+        }
+        Op::Finish(inst) => format!("finish({}_{})", inst.0, inst.1),
+        Op::Start(inst) => format!("start({}_{})", inst.0, inst.1),
     }
 }
 
