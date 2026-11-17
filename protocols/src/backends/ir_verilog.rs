@@ -20,7 +20,20 @@ pub fn monitor_to_verilog(
     monitor: &JointMonitorAutomaton,
     out: &mut impl std::io::Write,
 ) -> std::io::Result<()> {
-    let vgen = VerilogGen::new(st, m, monitor, monitor_pin_dir);
+    let state_labels = vec![
+        (monitor.control.graph.entry, "ST_ENTRY".to_string()),
+        (monitor.bad_state, "ST_BAD".to_string()),
+    ];
+
+    let regs = monitor.into();
+    let vgen = VerilogGen::new(
+        st,
+        m,
+        monitor.control.graph.clone(),
+        state_labels,
+        regs,
+        monitor_pin_dir,
+    );
 
     vgen.module_header(name, out)?;
     vgen.registers(st, ctx, out)?;
@@ -31,11 +44,31 @@ pub fn monitor_to_verilog(
 }
 
 /// for a monitor, both outputs and inputs of the dut are treated as inputs
-fn monitor_pin_dir(_pin: &Field) -> Dir {
+pub fn monitor_pin_dir(_pin: &Field) -> Dir {
     Dir::In
 }
 
-struct VerilogGen {
+#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq)]
+pub struct Reg {
+    pub sym: SymbolId,
+    pub inst: InstanceParameter,
+    pub init: ExprRef,
+}
+
+impl From<&JointMonitorAutomaton> for Vec<Reg> {
+    fn from(mon: &JointMonitorAutomaton) -> Self {
+        mon.registers
+            .iter()
+            .map(|(k, v)| Reg {
+                sym: *v,
+                inst: *k,
+                init: mon.register_inits[v],
+            })
+            .collect()
+    }
+}
+
+pub struct VerilogGen {
     keywords: FxHashSet<&'static str>,
     pg: ProtoGraph,
     symbol_names: FxHashMap<SymbolId, String>,
@@ -43,7 +76,7 @@ struct VerilogGen {
     state_labels: Vec<String>,
     state_reg: String,
     state_width: WidthInt,
-    regs: Vec<(SymbolId, InstanceParameter, ExprRef)>,
+    regs: Vec<Reg>,
     pins: Vec<(String, Dir, WidthInt)>,
 }
 
@@ -52,27 +85,27 @@ const MONITOR_PREFIX: &str = "$monitor_";
 const DUT_PREFIX: &str = "dut_";
 
 impl VerilogGen {
-    fn new(
+    pub fn new(
         st: &SymbolTable,
         m: &Module,
-        mon: &JointMonitorAutomaton,
+        pg: ProtoGraph,
+        custom_state_labels: Vec<(NodeId, String)>,
+        mut regs: Vec<Reg>,
         pin_dir: fn(&Field) -> Dir,
     ) -> Self {
-        let pg = mon.control.graph.clone();
         let keywords = FxHashSet::from_iter(VERILOG_KEYWORDS.iter().cloned());
-
         let num_states = pg.nodes().count();
         let state_width = usize::BITS - num_states.leading_zeros();
-        let mut state_labels: Vec<_> = (0..num_states).map(|ii| format!("ST_{ii}")).collect();
-        state_labels[pg.entry.as_u32() as usize] = "ST_ENTRY".to_string();
-        state_labels[mon.bad_state.as_u32() as usize] = "ST_BAD".to_string();
+        let lbls = FxHashMap::from_iter(custom_state_labels.into_iter());
+        let state_labels: Vec<_> = (0..num_states)
+            .map(|ii| {
+                lbls.get(&NodeId::from_u32(ii as u32))
+                    .cloned()
+                    .unwrap_or_else(|| format!("ST_{ii}"))
+            })
+            .collect();
         let state_reg = "state".to_string();
 
-        let mut regs: Vec<_> = mon
-            .registers
-            .iter()
-            .map(|(k, v)| (*v, *k, mon.register_inits[v]))
-            .collect();
         regs.sort();
         let pins: Vec<_> = m
             .pins
@@ -100,8 +133,8 @@ impl VerilogGen {
 
         // compute Verilog compatible names for all automaton registers
         let mut names = FxHashSet::default();
-        for &(reg, ..) in &regs {
-            let reg_name = st[reg].name();
+        for reg in &regs {
+            let reg_name = st[reg.sym].name();
             let name = reg_name.strip_prefix(MONITOR_PREFIX).unwrap_or(reg_name);
             let base = format!(
                 "_{}",
@@ -119,7 +152,7 @@ impl VerilogGen {
                 suffix += 1;
                 name = format!("{base}_{suffix}");
             }
-            out.insert_symbol_name(reg, name);
+            out.insert_symbol_name(reg.sym, name);
         }
 
         // register dut pins
@@ -140,7 +173,7 @@ impl VerilogGen {
         self.expr_names.insert(expr, name);
     }
 
-    fn module_header(&self, name: &str, out: &mut impl std::io::Write) -> std::io::Result<()> {
+    pub fn module_header(&self, name: &str, out: &mut impl std::io::Write) -> std::io::Result<()> {
         writeln!(out, "module {name} (")?;
         writeln!(out, "  input logic clk,")?;
         writeln!(out, "  input logic reset,")?;
@@ -155,7 +188,7 @@ impl VerilogGen {
         writeln!(out, ");\n")
     }
 
-    fn registers(
+    pub fn registers(
         &self,
         st: &SymbolTable,
         ctx: &Context,
@@ -175,12 +208,12 @@ impl VerilogGen {
             "  state_t {}, {NEXT_PREFIX}{};",
             self.state_reg, self.state_reg
         )?;
-        for (reg, ..) in &self.regs {
-            let name = &self.symbol_names[reg];
+        for reg in &self.regs {
+            let name = &self.symbol_names[&reg.sym];
             writeln!(
                 out,
                 "  {} {}, {NEXT_PREFIX}{};",
-                logic(st[reg].tpe().bitwidth()),
+                logic(st[reg.sym].tpe().bitwidth()),
                 name,
                 name,
             )?;
@@ -196,12 +229,12 @@ impl VerilogGen {
             self.state_reg,
             self.state_labels[self.pg.entry.as_u32() as usize]
         )?;
-        for (reg, _, value) in &self.regs {
+        for reg in &self.regs {
             writeln!(
                 out,
                 "      {} <= {};",
-                self.symbol_names[reg],
-                self.expr_to_verilog(ctx, *value)
+                self.symbol_names[&reg.sym],
+                self.expr_to_verilog(ctx, reg.init)
             )?;
         }
         writeln!(out, "    end else begin",)?;
@@ -210,8 +243,8 @@ impl VerilogGen {
             "      {} <= {NEXT_PREFIX}{};",
             self.state_reg, self.state_reg
         )?;
-        for (reg, _, _) in &self.regs {
-            let name = &self.symbol_names[reg];
+        for reg in &self.regs {
+            let name = &self.symbol_names[&reg.sym];
             writeln!(out, "      {name} <= {NEXT_PREFIX}{name};",)?;
         }
         writeln!(out, "    end",)?;
@@ -220,7 +253,7 @@ impl VerilogGen {
         Ok(())
     }
 
-    fn state_machine(
+    pub fn state_machine(
         &self,
         st: &SymbolTable,
         ctx: &mut Context,
@@ -229,8 +262,8 @@ impl VerilogGen {
         writeln!(out, "  always_comb begin")?;
         writeln!(out, "    // register default to their previous values")?;
         writeln!(out, "    next_state = state;")?;
-        for (reg, _, _) in &self.regs {
-            let name = &self.symbol_names[reg];
+        for reg in &self.regs {
+            let name = &self.symbol_names[&reg.sym];
             writeln!(out, "    {NEXT_PREFIX}{name} = {name};",)?;
         }
         writeln!(out)?;

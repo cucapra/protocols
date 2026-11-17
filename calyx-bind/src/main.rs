@@ -8,6 +8,7 @@ use crate::verilog::to_verilog;
 use baa::WidthInt;
 use clap::{ColorChoice, Parser};
 use patronus::expr::{Context, ExprRef};
+use protocols::backends::Reg;
 use protocols::frontend;
 use protocols::frontend::ast::Protocol;
 use protocols::frontend::diagnostic::DiagnosticHandler;
@@ -354,6 +355,11 @@ fn lower_protocols(
             if assigned.contains(reg) {
                 // only collect if register is actually used!
                 let init = p.register_inits[reg];
+                regs_and_init.push(Reg {
+                    sym: *reg,
+                    inst: (0, 0, Default::default()),
+                    init,
+                });
                 regs_and_init.push((*reg, init, *src));
             }
         }
