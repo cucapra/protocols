@@ -169,7 +169,7 @@ fn gen_driver(st: &mut SymbolTable, m: &Module, name: &str) {
         done_state_id,
         st,
         &node_labels,
-        &auto_regs,
+        auto_regs,
         &mut verilog,
     )
     .unwrap();
@@ -342,7 +342,7 @@ fn lower_protocols(
     st: &mut SymbolTable,
     ctx: &mut Context,
     m: &Module,
-) -> (ProtoGraph, Vec<NodeId>, Vec<(SymbolId, ExprRef, SymbolId)>) {
+) -> (ProtoGraph, Vec<NodeId>, Vec<Reg>) {
     let mut graph = ProtoGraph::new(m.protos[0].ctx.clone());
     let mut regs_and_init = vec![];
     let mut symbol_exprs = FxHashMap::default();
@@ -355,12 +355,7 @@ fn lower_protocols(
             if assigned.contains(reg) {
                 // only collect if register is actually used!
                 let init = p.register_inits[reg];
-                regs_and_init.push(Reg {
-                    sym: *reg,
-                    inst: (0, 0, Default::default()),
-                    init,
-                });
-                regs_and_init.push((*reg, init, *src));
+                regs_and_init.push(Reg { sym: *reg, init });
             }
         }
 

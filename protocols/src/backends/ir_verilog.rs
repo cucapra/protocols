@@ -6,7 +6,7 @@
 
 use crate::frontend::Module;
 use crate::frontend::symbol::{Dir, Field, SymbolId, SymbolKind, SymbolTable};
-use crate::ir::joint_monitor::{InstanceParameter, JointMonitorAutomaton};
+use crate::ir::joint_monitor::JointMonitorAutomaton;
 use crate::ir::proto_graph::{Action, NodeId, Op, ProtoGraph};
 use baa::{BitVecOps, WidthInt};
 use patronus::expr::{Context, Expr, ExprRef, TypeCheck};
@@ -51,7 +51,7 @@ pub fn monitor_pin_dir(_pin: &Field) -> Dir {
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub struct Reg {
     pub sym: SymbolId,
-    pub inst: InstanceParameter,
+    // pub inst: InstanceParameter,
     pub init: ExprRef,
 }
 
@@ -59,9 +59,9 @@ impl From<&JointMonitorAutomaton> for Vec<Reg> {
     fn from(mon: &JointMonitorAutomaton) -> Self {
         mon.registers
             .iter()
-            .map(|(k, v)| Reg {
+            .map(|(_k, v)| Reg {
                 sym: *v,
-                inst: *k,
+                // inst: *k,
                 init: mon.register_inits[v],
             })
             .collect()
@@ -182,7 +182,7 @@ impl VerilogGen {
                 Dir::In => "input",
                 Dir::Out => "output",
             };
-            writeln!(out, "  {direction} {} {pin_name},", logic(*width))?;
+            writeln!(out, "  {direction} {} {pin_name},", Self::logic(*width))?;
         }
         writeln!(out, "  output logic bad")?;
         writeln!(out, ");\n")
@@ -213,7 +213,7 @@ impl VerilogGen {
             writeln!(
                 out,
                 "  {} {}, {NEXT_PREFIX}{};",
-                logic(st[reg.sym].tpe().bitwidth()),
+                Self::logic(st[reg.sym].tpe().bitwidth()),
                 name,
                 name,
             )?;
@@ -464,6 +464,15 @@ impl VerilogGen {
             name.to_string()
         }
     }
+
+    pub fn logic(width: WidthInt) -> String {
+        assert!(width > 0);
+        if width == 1 {
+            "logic".to_string()
+        } else {
+            format!("logic [{}:0]", width - 1)
+        }
+    }
 }
 
 /// try to only add parenthesis if necessary
@@ -482,15 +491,6 @@ fn maybe_parens(s: &str, e: &Expr, parent: &Expr) -> String {
         | (Expr::BVOr(..), Expr::BVOr(..))
         | (Expr::BVXor(..), Expr::BVXor(..)) => s.to_string(),
         _ => format!("({s})"),
-    }
-}
-
-fn logic(width: WidthInt) -> String {
-    assert!(width > 0);
-    if width == 1 {
-        "logic".to_string()
-    } else {
-        format!("logic [{}:0]", width - 1)
     }
 }
 
